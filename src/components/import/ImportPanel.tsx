@@ -421,7 +421,6 @@ export function ImportPanel() {
             )}
             <button onClick={handleConfirmImport}
               className="w-full py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm"
-              disabled={totalParsed === 0 && parsedFiles.every(f => f.category === 'invoice_original' || f.error)}
             >
               {totalParsed > 0
                 ? `全部确认导入（${totalParsed} 条数据）→`
