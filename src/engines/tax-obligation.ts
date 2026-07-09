@@ -131,7 +131,7 @@ export interface ProgressStage {
 }
 
 export const ALL_STAGES: ProgressStage[] = [
-  { key: 'register', label: '注册公司', description: '登记公司基本信息' },
+  { key: 'register', label: '基础信息', description: '登记公司基本信息' },
   { key: 'import', label: '导入数据', description: '拖入银行流水、发票、工资表等' },
   { key: 'classify', label: '分类确认', description: '确认收入和支出分类是否正确' },
   { key: 'declare', label: '申报计算', description: '查看各税种计算结果并填报' },

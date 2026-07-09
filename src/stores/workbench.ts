@@ -19,7 +19,7 @@ export function getStageIndex(stage: AppStage): number {
 
 export function getStageLabel(stage: AppStage): string {
   const labels: Record<AppStage, string> = {
-    register: '注册公司',
+    register: '基础信息',
     import: '导入数据',
     classify: '分类确认',
     declare: '申报计算',
