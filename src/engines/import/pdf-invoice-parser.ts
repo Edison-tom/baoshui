@@ -7,7 +7,6 @@ import { logger } from '../../utils/logger'
 import type { InvoiceItem } from './types'
 import { parseInvoiceText } from './invoice-text-parser'
 
-
 /**
  * PDF 页面渲染为图片，再 OCR 提取文本
  */
@@ -34,27 +33,41 @@ async function ocrPdfPage(page: any): Promise<string> {
 }
 
 /**
- * 安全提取单页文本，失败时回退 OCR
+ * 尝试文本提取，任何失败自动回退 OCR
  */
-async function safeExtractPageText(doc: any, pageNum: number): Promise<string> {
+async function tryExtractOrOcr(doc: any, pageNum: number): Promise<string> {
+  const page = await doc.getPage(pageNum)
+
+  // 1. 先尝试文本提取
   try {
-    const page = await doc.getPage(pageNum)
-    const content = await page.getTextContent()
-    const items = content?.items
-    if (items && Array.isArray(items) && items.length > 0) {
-      const pageText = items.map((item: any) => (item && item.str) || '').join(' ')
-      if (pageText.trim().length > 20) return pageText
+    if (typeof page.getTextContent === 'function') {
+      const content = await page.getTextContent()
+      const items = content?.items
+      if (items && Array.isArray(items) && items.length > 0) {
+        const pageText = items.map((item: any) => (item && item.str) || '').join(' ')
+        if (pageText.trim().length > 20) return pageText
+      }
+      logger.warn("PDF", `第${pageNum}页文本为空`)
+    } else {
+      logger.warn("PDF", `第${pageNum}页 getTextContent 不可用`)
     }
-    // 文本不足 → 试 OCR
-    logger.warn("PDF", `第${pageNum}页无文本，尝试OCR`)
+  } catch (txErr: any) {
+    const msg = txErr?.message || JSON.stringify(txErr) || '未知'
+    logger.warn("PDF", `第${pageNum}页文本提取失败: ${msg}`)
+  }
+
+  // 2. 文本失败 → OCR
+  try {
+    logger.warn("PDF", `第${pageNum}页尝试OCR`)
     const ocrText = await ocrPdfPage(page)
     if (ocrText.trim().length > 20) return ocrText
-    logger.warn("PDF", `第${pageNum}页 OCR 也未提取到有效文本`)
-    return ''
-  } catch (err: any) {
-    logger.warn("PDF", `第${pageNum}页处理异常: ${err?.message || JSON.stringify(err) || '未知'}`)
-    return ''
+    logger.warn("PDF", `第${pageNum}页 OCR 文本不足`)
+  } catch (ocrErr: any) {
+    const msg = ocrErr?.message || JSON.stringify(ocrErr) || '未知'
+    logger.warn("PDF", `第${pageNum}页 OCR 失败: ${msg}`)
   }
+
+  return ''
 }
 
 /**
@@ -72,7 +85,7 @@ export async function extractPdfText(file: File): Promise<string> {
 
     const texts: string[] = []
     for (let i = 1; i <= doc.numPages; i++) {
-      const text = await safeExtractPageText(doc, i)
+      const text = await tryExtractOrOcr(doc, i)
       if (text) texts.push(text)
     }
 
@@ -106,6 +119,6 @@ export async function parsePdfInvoice(file: File): Promise<InvoiceItem[]> {
   } catch (err: any) {
     const msg = err?.message || JSON.stringify(err) || '未知错误'
     logger.error("PDF", `PDF 发票解析异常: ${file.name} — ${msg}`)
-    return [] // 绝不向外抛
+    return []
   }
 }
