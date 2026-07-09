@@ -1,0 +1,6 @@
+export { calcSmallScaleVat, calcGeneralVat } from './vat'
+export { calcSurtax } from './surtax'
+export { calcIit } from './iit'
+export { calcCit } from './cit'
+export { calcSocial } from './social'
+export { calcStampDuty } from './stamp'
