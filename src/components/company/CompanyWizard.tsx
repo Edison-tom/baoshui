@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useCompanyStore } from '../../stores/company'
 import { useWorkbenchStore } from '../../stores/workbench'
 import { determineTaxObligations } from '../../engines/tax-obligation'
+import { inferCurrentPeriod } from '../../engines/period-utils'
 import type { TaxpayerType, Province, VatQualification, EnabledModules } from '../../engines/types'
 
 const TAXPAYER_OPTIONS: { value: TaxpayerType; label: string; desc: string }[] = [
@@ -53,12 +54,7 @@ export function CompanyWizard() {
   const vatQualification: VatQualification =
     taxpayerType === 'general_taxpayer' ? 'general' : 'small_scale'
 
-  const currentPeriod = useMemo(() => ({
-    year: new Date().getFullYear(),
-    month: new Date().getMonth() + 1,
-    startDate: '',
-    endDate: '',
-  }), [])
+  const currentPeriod = useMemo(() => inferCurrentPeriod(taxpayerType), [taxpayerType])
 
   const obligations = useMemo(() => {
     return determineTaxObligations(taxpayerType, currentPeriod, modules)

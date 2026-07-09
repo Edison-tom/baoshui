@@ -5,7 +5,7 @@ import { useCompanyStore } from '../../stores/company'
 import { classifyAll } from '../../engines/classify'
 import { getCrossPeriodInvoiceSummary, getCrossPeriodTransactionSummary } from '../../engines/import/period-check'
 import type { ClassificationResult } from '../../engines/classify/types'
-import type { TaxPeriod } from '../../engines/types'
+import { formatPeriod } from '../../engines/period-utils'
 
 /** 分→元 显示 */
 function formatYuan(fen: number): string {
@@ -37,12 +37,6 @@ function sourceLabel(s: string): string {
     bank: '银行流水', invoice_in: '进项发票', invoice_out: '销项发票', expense: '费用报销',
   }
   return map[s] || s
-}
-
-/** 所属期文字描述 */
-function periodLabel(p: TaxPeriod): string {
-  if (p.quarter) return `${p.year}年第${p.quarter}季度`
-  return `${p.year}年${p.month}月`
 }
 
 /* ---------- 数据概览卡片 ---------- */
@@ -121,7 +115,7 @@ export function ClassifyPanel() {
   const crossPeriodBank = period ? getCrossPeriodTransactionSummary(bankTransactions, period) : null
   const periodWarnings: string[] = []
   if (crossPeriodInvoices && crossPeriodInvoices.count > 0) {
-    periodWarnings.push(`发票中有 ${crossPeriodInvoices.count} 条（${formatYuan(crossPeriodInvoices.totalAmount)}）不属于本期（${periodLabel(period!)}）`)
+    periodWarnings.push(`发票中有 ${crossPeriodInvoices.count} 条（${formatYuan(crossPeriodInvoices.totalAmount)}）不属于本期（${formatPeriod(period!)}）`)
   }
   if (crossPeriodBank && crossPeriodBank.count > 0) {
     periodWarnings.push(`银行流水中有 ${crossPeriodBank.count} 条不属于本期`)
@@ -177,7 +171,7 @@ export function ClassifyPanel() {
         {/* 期间提示 */}
         {period && (
           <div className="mb-4 px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-600 flex items-center gap-2">
-            📅 当前所属期：<strong>{periodLabel(period)}</strong>
+            📅 当前所属期：<strong>{formatPeriod(period)}</strong>
             {periodWarnings.length > 0 && (
               <span className="ml-auto text-amber-600 text-xs flex items-center gap-1">
                 ⚠️ {periodWarnings.join('；')}
@@ -354,7 +348,7 @@ export function ClassifyPanel() {
       {/* 跨期提示 */}
       {result.crossPeriod.length > 0 && (
         <div className="mt-3 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-          📅 有 <strong>{result.crossPeriod.length}</strong> 笔交易的日期不属于本期（{period ? periodLabel(period) : ''}）。
+          📅 有 <strong>{result.crossPeriod.length}</strong> 笔交易的日期不属于本期（{period ? formatPeriod(period) : ''}）。
           请在确认时判断是否应计入本期。例如：上期发票本期才入账 → 应计入本期；代开发票实际是上期的 → 不应计入。
         </div>
       )}
