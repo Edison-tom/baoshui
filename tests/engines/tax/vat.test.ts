@@ -32,8 +32,8 @@ describe('calcSmallScaleVat', () => {
 
 describe('calcGeneralVat', () => {
   it('calculates output minus input', () => {
-    const sales = makeInvoice({ amount: 100000, taxAmount: 13000, taxRate: 0.13 })
-    const purchase = makeInvoice({ amount: 50000, taxAmount: 6500, taxRate: 0.13, isPurchase: true })
+    const sales = makeInvoice({ amount: 100000, taxAmount: 13000, taxRate: 0.13, invoiceType: 'special' })
+    const purchase = makeInvoice({ amount: 50000, taxAmount: 6500, taxRate: 0.13, invoiceType: 'special', isPurchase: true })
     const result = calcGeneralVat([sales, purchase])
     expect(result.taxPayable).toBe(6500) // 13000 - 6500
   })

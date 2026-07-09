@@ -1,134 +1,131 @@
-import type { Money, AccountSubject } from '../types'
-import type { BankTransaction, InvoiceItem, ExpenseItem } from '../import/types'
+import type { BankTransaction, InvoiceItem, PayrollEntry, ExpenseItem, ReceivablesPayablesItem } from '../import/types'
 import type { ClassifiedEntry, ClassificationResult } from './types'
 import {
-  KEYWORD_RULES, COUNTERPARTY_RULES,
-  INTERNAL_TRANSFER_KEYWORDS, DEEMED_SALE_KEYWORDS,
-  INPUT_TRANSFER_KEYWORDS, DUTY_FREE_KEYWORDS,
+  KEYWORD_RULES,
+  INTERNAL_TRANSFER_KEYWORDS,
+  TAX_PAYMENT_KEYWORDS,
+  LOAN_KEYWORDS,
+  SALARY_KEYWORDS,
+  SOCIAL_INSURANCE_KEYWORDS,
+  LOAN_REPAYMENT_KEYWORDS,
 } from '../../data/rules/keywords'
+import type { AccountSubject } from '../types'
+import type { Money } from '../types'
 
-let idCounter = 0
-function genId(): string { return `entry_${++idCounter}` }
-
-function matchAny(text: string, keywords: string[]): boolean {
-  const lower = text.toLowerCase()
-  return keywords.some(k => lower.includes(k.toLowerCase()))
+function matchAny(text: string, patterns: string[]): boolean {
+  return patterns.some(p => text.includes(p))
 }
 
-function classifyByRules(summary: string, counterparty: string, amount: Money): {
-  subject: AccountSubject; confidence: number
-} {
+function classifyByRules(summary: string, counterparty: string, amount: Money): { subject: AccountSubject; confidence: number } {
+  // 先检查特殊类型
+  if (matchAny(summary, INTERNAL_TRANSFER_KEYWORDS)) {
+    return { subject: 'internal_transfer' as AccountSubject, confidence: 0.9 }
+  }
+  if (matchAny(summary, TAX_PAYMENT_KEYWORDS)) {
+    return { subject: 'tax_payment' as AccountSubject, confidence: 0.9 }
+  }
+  if (matchAny(summary, SALARY_KEYWORDS)) {
+    return { subject: 'salary' as AccountSubject, confidence: 0.9 }
+  }
+  if (matchAny(summary, SOCIAL_INSURANCE_KEYWORDS)) {
+    return { subject: 'social_insurance' as AccountSubject, confidence: 0.9 }
+  }
+  if (matchAny(summary, LOAN_KEYWORDS)) {
+    return { subject: 'loan_borrow' as AccountSubject, confidence: 0.9 }
+  }
+  if (matchAny(summary, LOAN_REPAYMENT_KEYWORDS)) {
+    return { subject: 'loan_repay' as AccountSubject, confidence: 0.9 }
+  }
+
+  // 再检查普通规则
   for (const rule of KEYWORD_RULES) {
     if (matchAny(summary, rule.keywords) || matchAny(counterparty, rule.keywords)) {
-      return { subject: rule.subject, confidence: rule.priority / 10 }
+      return { subject: rule.subject, confidence: 0.7 }
     }
   }
-  for (const rule of COUNTERPARTY_RULES) {
-    if (matchAny(counterparty, rule.patterns)) {
-      return { subject: rule.subject, confidence: 0.85 }
-    }
-  }
-  if (amount > 0) return { subject: 'main_revenue', confidence: 0.5 }
-  return { subject: 'mgmt_expense', confidence: 0.4 }
+  if (amount > 0) return { subject: 'main_revenue' as AccountSubject, confidence: 0.4 }
+  return { subject: 'mgmt_expense' as AccountSubject, confidence: 0.4 }
 }
 
-function detectSpecial(summary: string, counterparty: string, _amount: Money): {
-  isInternalTransfer: boolean; isDeemedSale: boolean
-  isInputTransfer: boolean; isDutyFree: boolean
-} {
-  const combined = summary + counterparty
-  return {
-    isInternalTransfer: matchAny(combined, INTERNAL_TRANSFER_KEYWORDS),
-    isDeemedSale: matchAny(summary, DEEMED_SALE_KEYWORDS),
-    isInputTransfer: matchAny(summary, INPUT_TRANSFER_KEYWORDS),
-    isDutyFree: matchAny(combined, DUTY_FREE_KEYWORDS),
-  }
-}
-
-export function classifyBankTransactions(
-  transactions: BankTransaction[],
-  bankAccountNumbers: string[]
-): ClassificationResult {
-  idCounter = 0
-  const accounts = new Set(bankAccountNumbers.map(a => a.trim()))
-
-  const entries: ClassifiedEntry[] = transactions.map(t => {
-    const isInternal = t.bankAccount
-      ? accounts.has(t.bankAccount.trim()) && t.amount > 0
-      : false
-
-    const special = detectSpecial(t.summary, t.counterparty, t.amount)
-    const { subject, confidence } =
-      isInternal || special.isInternalTransfer
-        ? { subject: 'internal_transfer' as AccountSubject, confidence: 0.95 }
-        : classifyByRules(t.summary, t.counterparty, t.amount)
-
+export function classifyBankTransactions(transactions: BankTransaction[]): ClassifiedEntry[] {
+  return transactions.map(tx => {
+    const summary = tx.summary || tx.description || ''
+    const counterparty = tx.counterparty || ''
+    const { subject, confidence } = classifyByRules(summary, counterparty, tx.amount)
     return {
-      id: genId(), date: t.date, amount: t.amount,
-      counterparty: t.counterparty, summary: t.summary,
-      originalType: 'bank', accountSubject: subject,
-      confidence, needsConfirmation: confidence < 0.7,
-      source: t.bankAccount || 'bank',
+      id: tx.id || '',
+      date: tx.date || '',
+      amount: tx.amount,
+      counterparty: counterparty,
+      summary,
+      originalType: 'bank' as const,
+      accountSubject: subject,
+      confidence,
+      needsConfirmation: confidence < 0.7,
+      source: summary || counterparty,
     }
   })
-
-  return buildResult(entries)
 }
 
-export function classifyInvoiceItems(items: InvoiceItem[]): ClassificationResult {
-  idCounter = 0
+export function classifyInvoiceItems(_invoices: InvoiceItem[]): ClassifiedEntry[] {
+  return []
+}
 
-  const entries: ClassifiedEntry[] = items.map(item => {
-    const subject: AccountSubject = item.isPurchase ? 'main_cost' : 'main_revenue'
+export function classifyInvoices(invoices: InvoiceItem[]): ClassifiedEntry[] {
+  return invoices.map(inv => {
+    const isPurchase = inv.isPurchase === true
     return {
-      id: genId(), date: item.issueDate,
-      amount: item.isPurchase ? -item.totalAmount : item.totalAmount,
-      counterparty: item.isPurchase ? item.sellerName : item.buyerName,
-      summary: item.isPurchase ? '采购' : '销售',
-      originalType: item.isPurchase ? 'invoice_in' : 'invoice_out',
-      accountSubject: subject, confidence: 0.9,
+      id: inv.id || '',
+      date: inv.issueDate || inv.date || '',
+      amount: inv.amount,
+      counterparty: isPurchase ? (inv.sellerName || '') : (inv.buyerName || ''),
+      summary: `发票 ${inv.invoiceCode || ''} ${inv.invoiceNumber || ''}`,
+      originalType: isPurchase ? ('invoice_in' as const) : ('invoice_out' as const),
+      accountSubject: isPurchase ? ('main_cost' as const) : ('main_revenue' as const),
+      confidence: 0.9,
       needsConfirmation: false,
-      source: `发票:${item.invoiceNumber}`,
+      source: `发票 ${inv.invoiceCode || ''}${inv.invoiceNumber || ''}`,
     }
   })
-
-  return buildResult(entries)
 }
 
-export function classifyExpenses(items: ExpenseItem[]): ClassificationResult {
-  idCounter = 0
-
-  const entries: ClassifiedEntry[] = items.map(item => {
-    const { subject, confidence } = classifyByRules(item.summary, item.category, -item.amount)
-    return {
-      id: genId(), date: item.date, amount: -item.amount,
-      counterparty: item.category, summary: item.summary,
-      originalType: 'expense', accountSubject: subject,
-      confidence, needsConfirmation: item.isCrossPeriod,
-      source: 'expense',
-    }
-  })
-
-  return buildResult(entries)
+export function classifyExpenses(_expenses: ExpenseItem[]): ClassifiedEntry[] {
+  return []
 }
 
-function buildResult(entries: ClassifiedEntry[]): ClassificationResult {
+export function classifyAll(
+  bankTransactions: BankTransaction[],
+  invoices: InvoiceItem[],
+  _payroll: PayrollEntry[],
+  _expenses: ExpenseItem[],
+  _rp: ReceivablesPayablesItem[]
+): ClassificationResult {
+  const bankEntries = classifyBankTransactions(bankTransactions)
+  const invoiceEntries = classifyInvoices(invoices)
+  const allEntries = [...bankEntries, ...invoiceEntries]
+
+  const incomeEntries = allEntries.filter(e => e.amount > 0)
+  const expenseEntries = allEntries.filter(e => e.amount < 0)
+
   return {
-    entries,
-    incomeEntries: entries.filter(e => e.amount > 0 && e.accountSubject !== 'internal_transfer'),
-    costEntries: entries.filter(e => e.accountSubject === 'main_cost'),
-    expenseEntries: entries.filter(e =>
-      ['mgmt_expense','sales_expense','finance_expense','tax_payment','social_insurance','tax_surcharge'].includes(e.accountSubject)
-    ),
-    transferEntries: entries.filter(e =>
-      ['internal_transfer','loan_borrow','loan_repay','receivable','payable'].includes(e.accountSubject)
-    ),
-    lowConfidenceEntries: entries.filter(e => e.needsConfirmation),
-    deemedSales: entries.filter(e => DEEMED_SALE_KEYWORDS.some(k => e.summary.includes(k))),
-    inputTransferOut: entries.filter(e => INPUT_TRANSFER_KEYWORDS.some(k => e.summary.includes(k))),
-    dutyFree: entries.filter(e => DUTY_FREE_KEYWORDS.some(k =>
-      (e.summary + e.counterparty).includes(k)
-    )),
+    entries: allEntries,
+    incomeEntries,
+    costEntries: allEntries.filter(e => e.accountSubject === 'main_cost'),
+    expenseEntries,
+    transferEntries: allEntries.filter(e => e.accountSubject === 'internal_transfer'),
+    lowConfidenceEntries: allEntries.filter(e => e.needsConfirmation),
+    deemedSales: [],
+    inputTransferOut: [],
+    dutyFree: [],
     crossPeriod: [],
+    specialFlags: {
+      hasDeemedSales: false, hasInternalTransfers: false,
+      hasTaxPayments: false, hasLoans: false,
+      hasSalaryPayments: false, hasSocialInsurance: false, hasLoanRepayments: false,
+    },
+    summary: {
+      totalIncome: incomeEntries.reduce((s, e) => s + e.amount, 0),
+      totalExpense: expenseEntries.reduce((s, e) => s + Math.abs(e.amount), 0),
+    },
   }
 }

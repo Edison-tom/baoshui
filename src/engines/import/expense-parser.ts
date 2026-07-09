@@ -13,5 +13,6 @@ export function parseExpense(rows: Record<string,any>[]): ExpenseItem[] {
       isCrossPeriod: String(r['是否跨期'] || '').includes('是'),
       crossPeriodMonths: parseInt(String(r['分摊月数'] || '0')) || undefined,
       accountSubject: r['对应科目'] ? String(r['对应科目']) : undefined,
+      description: String(r['摘要'] || r['事由'] || ''),
     }))
 }

@@ -24,6 +24,10 @@ export function parseInvoiceExport(rows: Record<string,any>[], _companyName?: st
       const isPurchase = direction.includes('进') || direction.includes('购')
       const typeStr = String(r['发票类型'] || r['类型'] || '')
       const invoiceType = typeStr.includes('专用') ? 'special' as const : 'general' as const
+      const amount = parseMoney(r['金额'] || r['不含税金额'])
+      const taxAmount = parseMoney(r['税额'] || r['增值税额'])
+      const totalAmount = parseMoney(r['价税合计'] || r['含税金额'])
+      const taxRate = parseRate(String(r['税率'] || '1%'))
 
       return {
         invoiceCode: String(r['发票代码'] || ''),
@@ -31,12 +35,17 @@ export function parseInvoiceExport(rows: Record<string,any>[], _companyName?: st
         issueDate: normalizeDate(String(r['开票日期'] || r['日期'] || '')),
         sellerName: String(r['销方名称'] || ''),
         buyerName: String(r['购方名称'] || ''),
-        amount: parseMoney(r['金额'] || r['不含税金额']),
-        taxAmount: parseMoney(r['税额'] || r['增值税额']),
-        totalAmount: parseMoney(r['价税合计'] || r['含税金额']),
-        taxRate: parseRate(String(r['税率'] || '1%')),
+        amount,
+        taxAmount,
+        totalAmount,
+        taxRate,
         invoiceType,
         isPurchase,
+        // 兼容字段
+        invoiceNo: String(r['发票号码'] || ''),
+        date: normalizeDate(String(r['开票日期'] || r['日期'] || '')),
+        type: invoiceType === 'special' ? 'special' as const : 'plain' as const,
+        category: isPurchase ? '采购' : '销售',
       }
     })
 }

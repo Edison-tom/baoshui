@@ -48,8 +48,10 @@ export function parseBankExcel(rows: Record<string,any>[]): BankTransaction[] {
         amount: credit > 0 ? credit : -debit,
         counterparty: String(r[counterpartyCol] || ''),
         summary: String(r[summaryCol] || ''),
-        bankAccount: '',
+        bankAccount: String(r['账号'] || ''),
         balance: parseMoney(r[balanceCol]),
+        description: String(r[summaryCol] || ''),
+        accountNumber: String(r['账号'] || ''),
       }
     })
 }

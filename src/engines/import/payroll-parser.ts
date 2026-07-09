@@ -14,11 +14,13 @@ export function parsePayroll(rows: Record<string,any>[]): PayrollEntry[] {
       const employeeType = et.includes('劳务') ? 'labor' as const
         : et.includes('年终奖') ? 'bonus' as const : 'formal' as const
 
+      const grossSalary = get('应发工资')
+
       return {
         name: String(r['姓名'] || ''),
         idNumber: String(r['身份证号'] || ''),
         employeeType,
-        grossSalary: get('应发工资'),
+        grossSalary,
         socialBase: get('社保基数'),
         housingFundBase: get('公积金基数'),
         childrenEdu: get('子女教育'),
@@ -31,6 +33,13 @@ export function parsePayroll(rows: Record<string,any>[]): PayrollEntry[] {
         personalPension: r['个人养老金'] ? get('个人养老金') : undefined,
         commercialHealthIns: r['商业健康保险'] ? get('商业健康保险') : undefined,
         enterpriseAnnuity: r['企业年金'] ? get('企业年金') : undefined,
+        // 兼容字段
+        employeeName: String(r['姓名'] || ''),
+        grossPay: grossSalary,
+        socialInsurance: get('社保基数') * 0.105, // 个人社保约10.5%
+        taxableIncome: grossSalary - 5000 - (get('社保基数') * 0.105),
+        netPay: grossSalary,
+        type: 'regular' as const,
       }
     })
 }

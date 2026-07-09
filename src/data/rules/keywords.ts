@@ -34,3 +34,9 @@ export const INTERNAL_TRANSFER_KEYWORDS = ['转账','划转','转存','同名','
 export const DEEMED_SALE_KEYWORDS = ['赠送','样品','福利','试用','捐赠']
 export const INPUT_TRANSFER_KEYWORDS = ['福利','个人消费','集体福利','个人','餐饮']
 export const DUTY_FREE_KEYWORDS = ['免税','出口','境外','保税']
+
+export const TAX_PAYMENT_KEYWORDS = ['税务','税务局','缴税','税款','增值税','所得税']
+export const LOAN_KEYWORDS = ['贷款','借款','信贷','贷入']
+export const SALARY_KEYWORDS = ['工资','薪金','薪酬','劳务费']
+export const SOCIAL_INSURANCE_KEYWORDS = ['社保','养老保险','医疗保险','失业保险','工伤保险','生育保险','公积金']
+export const LOAN_REPAYMENT_KEYWORDS = ['还贷','还款','偿还','归还贷款']

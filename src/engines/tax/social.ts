@@ -1,55 +1,54 @@
 import type { PayrollEntry } from '../import/types'
-import type { SocialResult, SocialEntry } from './types'
-import type { ProvinceConfig } from '../../data/provinces/hunan'
+import type { SocialEntry, SocialResult } from './types'
 
-export function calcSocial(
-  payroll: PayrollEntry[],
-  config: ProvinceConfig
-): SocialResult {
-  const s = config.social
-  const entries: SocialEntry[] = []
+// 湖南省社保费率（2025参考）
+const RATES = {
+  pension: { company: 0.16, personal: 0.08 },
+  medical: { company: 0.08, personal: 0.02 },
+  injury: { company: 0.007, personal: 0 },
+  unemployment: { company: 0.005, personal: 0.005 },
+  housingFund: { company: 0.12, personal: 0.12 },
+}
 
-  for (const p of payroll) {
-    if (p.employeeType !== 'formal') continue
+export function calcSocial(payroll: PayrollEntry[]): SocialResult {
+  const entries: SocialEntry[] = payroll.map(e => {
+    const name = e.name || e.employeeName || ''
+    const base = e.socialBase || e.grossSalary || e.grossPay || 0
 
-    let base = p.socialBase || p.grossSalary
-    base = Math.max(base, s.baseLower)
-    base = Math.min(base, s.baseUpper)
-
-    const hfBase = Math.min(p.housingFundBase || base, s.baseUpper * s.housingFundUpperMultiplier)
-
-    entries.push({
-      name: p.name,
+    return {
+      name,
       base,
       pension: {
-        company: Math.round(base * s.pension.company * 100) / 100,
-        personal: Math.round(base * s.pension.personal * 100) / 100,
+        company: Math.round(base * RATES.pension.company * 100) / 100,
+        personal: Math.round(base * RATES.pension.personal * 100) / 100,
       },
       medical: {
-        company: Math.round(base * s.medical.company * 100) / 100,
-        personal: Math.round(base * s.medical.personal * 100) / 100,
+        company: Math.round(base * RATES.medical.company * 100) / 100,
+        personal: Math.round(base * RATES.medical.personal * 100) / 100,
       },
-      injury: { company: Math.round(base * s.injury.company * 100) / 100 },
+      injury: {
+        company: Math.round(base * RATES.injury.company * 100) / 100,
+      },
       unemployment: {
-        company: Math.round(base * s.unemployment.company * 100) / 100,
-        personal: Math.round(base * s.unemployment.personal * 100) / 100,
+        company: Math.round(base * RATES.unemployment.company * 100) / 100,
+        personal: Math.round(base * RATES.unemployment.personal * 100) / 100,
       },
       housingFund: {
-        company: Math.round(hfBase * s.housingFund.company * 100) / 100,
-        personal: Math.round(hfBase * s.housingFund.personal * 100) / 100,
+        company: Math.round(base * RATES.housingFund.company * 100) / 100,
+        personal: Math.round(base * RATES.housingFund.personal * 100) / 100,
       },
-    })
-  }
+    }
+  })
 
-  return {
-    entries,
-    companyTotal: Math.round(entries.reduce((s, e) =>
-      s + e.pension.company + e.medical.company + e.injury.company
-      + e.unemployment.company + e.housingFund.company, 0
-    ) * 100) / 100,
-    personalTotal: Math.round(entries.reduce((s, e) =>
-      s + e.pension.personal + e.medical.personal + e.unemployment.personal
-      + e.housingFund.personal, 0
-    ) * 100) / 100,
-  }
+  const totalC = (e: SocialEntry) =>
+    e.pension.company + e.medical.company + e.injury.company +
+    e.unemployment.company + e.housingFund.company
+  const totalP = (e: SocialEntry) =>
+    e.pension.personal + e.medical.personal +
+    e.unemployment.personal + e.housingFund.personal
+
+  const companyTotal = entries.reduce((s, e) => s + totalC(e), 0)
+  const personalTotal = entries.reduce((s, e) => s + totalP(e), 0)
+
+  return { entries, companyTotal, personalTotal }
 }
