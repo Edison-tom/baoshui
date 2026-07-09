@@ -11,7 +11,6 @@ import { parseExpense } from '../../engines/import/expense-parser'
 import { parseReceivablesPayables } from '../../engines/import/rp-parser'
 import { parseOfdFile } from '../../engines/import/ofd-parser'
 import { parsePdfInvoice } from '../../engines/import/pdf-invoice-parser'
-import { parseInvoiceText } from '../../engines/import/invoice-text-parser'
 import type { FileCategory, InvoiceItem, BankTransaction, PayrollEntry, ExpenseItem, ReceivablesPayablesItem } from '../../engines/import/types'
 import * as XLSX from 'xlsx'
 

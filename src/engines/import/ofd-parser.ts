@@ -4,7 +4,7 @@
  */
 import type { InvoiceItem } from './types'
 import { parseInvoiceText } from './invoice-text-parser'
-import { parseMoney } from './bank-parser'
+
 
 interface ParsedOfdInvoice {
   invoiceCode: string; invoiceNumber: string; issueDate: string
