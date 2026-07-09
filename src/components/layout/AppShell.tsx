@@ -1,5 +1,6 @@
 import { useCompanyStore } from '../../stores/company'
 import { useImportStore } from '../../stores/import'
+import { useClassifyStore } from '../../stores/classify'
 import { useWorkbenchStore } from '../../stores/workbench'
 import { Header } from './Header'
 import { BottomProgressBar } from './BottomProgressBar'
@@ -15,6 +16,7 @@ type Stage = typeof STAGES[number]
 export function AppShell() {
   const isRegistered = useCompanyStore(s => s.isRegistered)
   const hasImportedData = useImportStore(s => s.hasImportedData)
+  const classifyResult = useClassifyStore(s => s.result)
   const currentStage = useWorkbenchStore(s => s.currentStage)
   const setStage = useWorkbenchStore(s => s.setStage)
   const isClosing = useWorkbenchStore(s => s.isClosing)
@@ -24,7 +26,6 @@ export function AppShell() {
   const handleBack = () => {
     if (idx <= 0) return
     const prev = STAGES[idx - 1]
-    // 前置条件检查
     if (prev === 'classify' && !hasImportedData) return
     if (prev === 'import' && !isRegistered) return
     setStage(prev)
@@ -33,22 +34,23 @@ export function AppShell() {
   const handleForward = () => {
     if (idx >= STAGES.length - 1) return
     const next = STAGES[idx + 1]
-    // 前置条件检查
     if (next === 'classify' && !hasImportedData) return
     if (next === 'import' && !isRegistered) return
     setStage(next)
   }
 
   const showBack = idx > 0 && !isClosing
-  const showForward = idx < STAGES.length - 1 && !isClosing // 不含 closing
+  const showForward = idx < STAGES.length - 1 && !isClosing
 
-  // 前进按钮文案和禁用
   const forwardInfo = (() => {
     if (currentStage === 'import') {
       const disabled = !hasImportedData
       return { disabled, text: disabled ? '请先导入数据' : '前往分类确认 →', hint: disabled }
     }
-    if (currentStage === 'classify') return { disabled: false, text: '前往申报计算 →', hint: false }
+    if (currentStage === 'classify') {
+      const disabled = !classifyResult
+      return { disabled, text: disabled ? '请先完成分类' : '前往申报计算 →', hint: disabled }
+    }
     if (currentStage === 'declare') return { disabled: false, text: '完成申报 · 安全销毁数据 →', hint: false }
     return { disabled: true, text: '', hint: false }
   })()
@@ -107,17 +109,21 @@ export function AppShell() {
         {currentStage === 'classify' && (
           <div className="px-6 py-8">
             <h2 className="text-lg font-semibold text-slate-900 mb-1">分类确认</h2>
-            <p className="text-sm text-slate-500 mb-6">确认收入和支出分类是否正确，然后在下方点击"开始申报"</p>
+            <p className="text-sm text-slate-500 mb-6">
+              {classifyResult ? '确认收入和支出分类是否正确，然后点击"确认无误，开始申报"' : '已导入数据的概览，点击"开始自动分类"后系统将匹配会计科目'}
+            </p>
             <ClassifyPanel />
-            <div className="mt-6 text-center">
-              <button
-                onClick={() => setStage('declare')}
-                className="px-8 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg
-                  hover:bg-blue-700 shadow-sm"
-              >
-                确认无误，开始申报 →
-              </button>
-            </div>
+            {classifyResult && (
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setStage('declare')}
+                  className="px-8 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg
+                    hover:bg-blue-700 shadow-sm"
+                >
+                  确认无误，开始申报 →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -139,6 +145,7 @@ export function AppShell() {
                 onClick={() => {
                   useCompanyStore.getState().clearCompany()
                   useImportStore.getState().clearAll()
+                  useClassifyStore.getState().clearResult()
                   setStage('register')
                 }}
                 className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
