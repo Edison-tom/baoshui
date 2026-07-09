@@ -10,7 +10,7 @@ import { parseInvoiceText } from './invoice-text-parser'
  * PDF 页面渲染为图片，再 OCR 提取文本
  */
 async function ocrPdfPage(page: any): Promise<string> {
-  const viewport = page.getViewport({ scale: 2 }) // 2x 提高 OCR 精度
+  const viewport = page.getViewport({ scale: 3 }) // 3x 提高 OCR 精度
   const canvas = document.createElement('canvas')
   canvas.width = viewport.width
   canvas.height = viewport.height
@@ -21,6 +21,9 @@ async function ocrPdfPage(page: any): Promise<string> {
   const imageUrl = URL.createObjectURL(blob)
   try {
     const { data } = await Tesseract.recognize(imageUrl, 'chi_sim+eng', { logger: () => {} })
+    // 记录 OCR 文本前 200 字符用于调试
+    const preview = data.text.slice(0, 200).replace(/\n/g, '↵')
+    logger.info("OCR", `识别结果预览: ${preview}`)
     return data.text
   } finally {
     URL.revokeObjectURL(imageUrl)
@@ -86,7 +89,7 @@ export async function parsePdfInvoice(file: File): Promise<InvoiceItem[]> {
     }
     const invoice = parseInvoiceText(text, file.name)
     if (!invoice) {
-      logger.warn("PDF", "PDF文本中未匹配到发票格式: " + file.name)
+      logger.warn("PDF", "PDF文本中未匹配到发票/财务格式: " + file.name)
     }
     return invoice ? [invoice] : []
   } catch (e: any) {
