@@ -224,8 +224,9 @@ export function ImportPanel() {
           if (parsedCount === 0 && !error) error = '未识别到发票信息'
         }
       } catch (e: any) {
-        logger.error("Import", "解析出错: " + file.name, e)
-        error = `解析出错：${e.message || e}`
+        const msg = e?.message || (typeof e === 'object' ? JSON.stringify(e) : String(e)) || '未知错误'
+        logger.error("Import", `解析出错: ${file.name} — ${msg}`, e)
+        error = `解析出错：${msg}`
         if (e?.stack) error += " (详情见调试面板)"
       }
 
