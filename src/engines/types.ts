@@ -34,7 +34,7 @@ export interface BankAccount {
 }
 
 export interface CompanyInfo {
-  fullName: string; shortName: string
+  fullName: string
   taxpayerType: TaxpayerType; province: Province
   collectionMethod: CollectionMethod; vatQualification: VatQualification
   modules: EnabledModules; bankAccounts: BankAccount[]; period: TaxPeriod

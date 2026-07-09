@@ -16,7 +16,6 @@ test.describe('报税助手 Web 版 E2E 测试', () => {
   test('公司注册 — 填写信息后进入高级选项页', async ({ page }) => {
     await page.goto('/')
     await page.getByPlaceholder('营业执照上的完整名称').fill('长沙某某科技有限公司')
-    await page.getByPlaceholder('日常称呼').fill('湘科公司')
     await page.locator('input[type="radio"][value="small_scale_taxpayer"]').check()
     await expect(page.locator('text=当期应报税种预览')).toBeVisible()
     // 进入第二步
@@ -39,7 +38,6 @@ test.describe('报税助手 Web 版 E2E 测试', () => {
   test('高级选项单独页面 — 勾选后税种更新', async ({ page }) => {
     await page.goto('/')
     await page.getByPlaceholder('营业执照上的完整名称').fill('长沙某某科技')
-    await page.getByPlaceholder('日常称呼').fill('湘科')
     await page.locator('input[type="radio"][value="small_scale_taxpayer"]').check()
     await page.click('text=下一步：设置高级选项')
 
@@ -52,14 +50,13 @@ test.describe('报税助手 Web 版 E2E 测试', () => {
 
   test('不填全称不能进入下一步', async ({ page }) => {
     await page.goto('/')
-    await page.getByPlaceholder('日常称呼').fill('湘科公司')
+    // 不填写全称，按钮应禁用
     await expect(page.locator('button:has-text("设置高级选项")')).toBeDisabled()
   })
 
   test('返回修改按钮', async ({ page }) => {
     await page.goto('/')
     await page.getByPlaceholder('营业执照上的完整名称').fill('长沙某某科技有限公司')
-    await page.getByPlaceholder('日常称呼').fill('湘科公司')
     await page.click('text=下一步：设置高级选项')
     // 点击返回
     await page.click('text=← 返回修改')
@@ -75,7 +72,6 @@ test.describe('报税助手 Web 版 E2E 测试', () => {
   test('导入数据阶段显示模板下载和拖入区', async ({ page }) => {
     await page.goto('/')
     await page.getByPlaceholder('营业执照上的完整名称').fill('长沙某某科技有限公司')
-    await page.getByPlaceholder('日常称呼').fill('湘科公司')
     await page.click('text=下一步：设置高级选项')
     await page.click('text=完成，开始报税')
     await expect(page.locator('text=先下载模板填写数据')).toBeVisible()
@@ -85,25 +81,24 @@ test.describe('报税助手 Web 版 E2E 测试', () => {
   test('左右栏布局 — 申报计算阶段', async ({ page }) => {
     await page.goto('/')
     await page.locator('input').nth(0).pressSequentially('长沙某某科技有限公司')
-    await page.locator('input').nth(1).pressSequentially('湘科公司')
     await page.waitForTimeout(100)
     await page.locator('button:has-text("下一步")').click()
     await page.waitForTimeout(100)
     await page.locator('button:has-text("完成，开始报税")').click()
     await page.waitForTimeout(300)
     await expect(page.getByText('先下载模板填写数据')).toBeVisible({ timeout: 8000 })
-    
+
     // 上传 .xlsx 测试文件
     const testFilePath = path.join(process.cwd(), 'tests', 'e2e', '__test_data.xlsx')
     await page.locator('input[type="file"]').setInputFiles(testFilePath)
     await page.waitForTimeout(3000)
-    
+
     // 检查按钮
     const hasImportBtn = await page.locator('button:has-text("确认导入")').isVisible()
     if (!hasImportBtn) {
       throw new Error('File import did not complete')
     }
-    
+
     await page.locator('button:has-text("确认导入")').click()
     await page.waitForTimeout(300)
     await expect(page.getByText('分类确认').first()).toBeVisible()
@@ -116,12 +111,11 @@ test.describe('报税助手 Web 版 E2E 测试', () => {
   test('高级选项页可返回并修改', async ({ page }) => {
     await page.goto('/')
     await page.getByPlaceholder('营业执照上的完整名称').fill('长沙某某科技')
-    await page.getByPlaceholder('日常称呼').fill('湘科')
     await page.click('text=下一步：设置高级选项')
     // 返回
     await page.click('text=← 返回修改')
-    // 修改简称
-    await page.getByPlaceholder('日常称呼').fill('湘科修改版')
+    // 修改全称
+    await page.getByPlaceholder('营业执照上的完整名称').fill('长沙某某科技有限公司')
     await page.click('text=下一步：设置高级选项')
     // 勾选两个选项
     await page.locator('label:has-text("研发费用加计扣除")').click()

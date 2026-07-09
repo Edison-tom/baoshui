@@ -37,7 +37,6 @@ export function CompanyWizard() {
   const register = useCompanyStore(s => s.register)
   const [step, setStep] = useState(0) // 0 = 基础信息, 1 = 高级选项
   const [fullName, setFullName] = useState('')
-  const [shortName, setShortName] = useState('')
   const [taxpayerType, setTaxpayerType] = useState<TaxpayerType>('small_scale_taxpayer')
   const [province, setProvince] = useState<Province>('hunan')
   const [modules, setModules] = useState<EnabledModules>({ ...defaultModules })
@@ -56,13 +55,11 @@ export function CompanyWizard() {
     return determineTaxObligations(taxpayerType, currentPeriod, modules)
   }, [taxpayerType, modules, currentPeriod])
 
-  const dueCount = obligations.filter(o => o.isDue).length
-  const canRegister = fullName.trim().length > 0 && shortName.trim().length > 0
+  const canRegister = fullName.trim().length > 0
 
   const handleRegister = () => {
     register({
       fullName: fullName.trim(),
-      shortName: shortName.trim(),
       taxpayerType, province,
       collectionMethod: 'audit',
       vatQualification,
@@ -108,15 +105,6 @@ export function CompanyWizard() {
               </span>
             </label>
 
-            {/* 公司简称 */}
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">公司简称</span>
-              <input value={shortName} onChange={e => setShortName(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm
-                  focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                placeholder="日常称呼，如 张三科技" />
-            </label>
-
             {/* 纳税主体类型 */}
             <div>
               <span className="text-sm font-medium text-slate-700">纳税主体类型</span>
@@ -155,45 +143,31 @@ export function CompanyWizard() {
 
             {/* 当期应报税种预览 */}
             <div className="bg-slate-50 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  当期应报税种预览
-                </h3>
-                <span className="text-xs text-blue-600 font-medium">
-                  {dueCount} 项
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {obligations.filter(o => o.isDue).map(ob => (
-                  <span key={ob.key}
-                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700"
-                    title={ob.plainExplanation}
-                  >
-                    {ob.name}
-                    {ob.frequency === 'monthly' ? '·月' : '·季'}
-                  </span>
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">当期应报税种预览</h3>
+              <ul className="space-y-1">
+                {obligations.map(o => (
+                  <li key={o.key} className="flex items-center gap-2 text-sm">
+                    <span className={`w-1.5 h-1.5 rounded-full ${o.isDue ? 'bg-green-500' : 'bg-slate-300'}`} />
+                    <span className={o.isDue ? 'text-slate-800' : 'text-slate-400'}>
+                      {o.name}
+                      <span className="text-xs text-slate-400 ml-1">
+                        ({o.frequency === 'monthly' ? '月报' : o.frequency === 'quarterly' ? '季报' : '年报'})
+                      </span>
+                    </span>
+                    {o.isDue && <span className="text-xs text-green-600 font-medium ml-auto">本期需报</span>}
+                  </li>
                 ))}
-                {obligations.filter(o => !o.isDue).map(ob => (
-                  <span key={ob.key}
-                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-400 line-through"
-                  >
-                    {ob.name}（本期不报）
-                  </span>
-                ))}
-              </div>
+              </ul>
             </div>
 
-            {/* 下一步 */}
+            {/* 下一步按钮 */}
             <button
               onClick={() => setStep(1)}
               disabled={!canRegister}
-              className={`w-full py-2.5 text-sm font-medium rounded-lg transition-all ${
-                canRegister
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
-                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              }`}
+              className="w-full py-2.5 rounded-lg text-sm font-medium transition-colors
+                bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed shadow-sm"
             >
-              下一步：设置高级选项 →
+              下一步：设置高级选项
             </button>
           </div>
         </div>
@@ -201,14 +175,18 @@ export function CompanyWizard() {
     )
   }
 
-  // 步骤 1: 高级选项（有大白话解释）
+  // 步骤 1: 高级选项
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4">
       <div className="w-full max-w-lg">
-        <h1 className="text-2xl font-bold text-slate-900 text-center mb-1">报税助手</h1>
-        <p className="text-sm text-slate-500 text-center mb-6">
-          选择你公司涉及的特殊情况（大多数公司不需要，按需勾选即可）
-        </p>
+        <div className="mb-6">
+          <button
+            onClick={() => setStep(0)}
+            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            ← 返回修改
+          </button>
+        </div>
 
         {/* 步骤指示器 */}
         <div className="flex items-center gap-2 mb-6">
@@ -217,70 +195,65 @@ export function CompanyWizard() {
           <span className="text-xs text-slate-400 ml-auto">2 / 2</span>
         </div>
 
-        <div className="space-y-5">
-          {/* 高级选项列表 */}
-          <div className="space-y-1">
-            {ADVANCED_MODULES.map(mod => (
-              <div key={mod.key}
-                className={`p-3 rounded-lg border transition-colors ${
-                  modules[mod.key]
-                    ? 'border-blue-300 bg-blue-50'
-                    : 'border-slate-200'
-                }`}
-              >
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={modules[mod.key]}
-                    onChange={() => toggleModule(mod.key)}
-                    className="mt-0.5 rounded border-slate-300 accent-blue-600" />
-                  <div>
-                    <span className="text-sm font-medium text-slate-800">{mod.label}</span>
-                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{mod.plain}</p>
-                  </div>
-                </label>
+        <h2 className="text-lg font-semibold text-slate-900 mb-1">
+          选择你公司涉及的特殊情况
+        </h2>
+        <p className="text-sm text-slate-500 mb-6">
+          以下为可选项目，大多数小公司不需要勾选任何项目，可直接下一步
+        </p>
+
+        <div className="space-y-3 mb-6">
+          {ADVANCED_MODULES.map(mod => (
+            <label key={mod.key}
+              className={`block p-3 rounded-lg border cursor-pointer transition-colors ${
+                modules[mod.key]
+                  ? 'border-blue-400 bg-blue-50'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <input type="checkbox"
+                  checked={modules[mod.key]}
+                  onChange={() => toggleModule(mod.key)}
+                  className="mt-0.5 accent-blue-600" />
+                <div>
+                  <span className="text-sm font-medium text-slate-800">{mod.label}</span>
+                  <p className="text-xs text-slate-400 mt-0.5">{mod.plain}</p>
+                </div>
               </div>
-            ))}
-          </div>
-
-          <p className="text-xs text-slate-400 text-center">
-            以上选项默认不勾选，只有公司确实涉及才勾选，不影响日常申报
-          </p>
-
-          {/* 当期应报税种预览（更新后） */}
-          <div className="bg-slate-50 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                勾选后应报税种
-              </h3>
-              <span className="text-xs text-blue-600 font-medium">{dueCount} 项</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {obligations.filter(o => o.isDue).map(ob => (
-                <span key={ob.key}
-                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700"
-                >
-                  {ob.name}
-                  {ob.frequency === 'monthly' ? '·月' : '·季'}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* 操作按钮 */}
-          <div className="flex gap-3">
-            <button onClick={() => setStep(0)}
-              className="flex-1 py-2.5 text-sm font-medium rounded-lg border border-slate-300
-                text-slate-600 hover:bg-slate-50 transition-all"
-            >
-              ← 返回修改
-            </button>
-            <button onClick={handleRegister}
-              className="flex-1 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white
-                hover:bg-blue-700 shadow-sm transition-all"
-            >
-              完成，开始报税 →
-            </button>
-          </div>
+            </label>
+          ))}
         </div>
+
+        {/* 税种更新提示 */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6">
+          <p className="text-xs text-amber-700">
+            勾选项目后，上方"当期应报税种"会自动更新
+          </p>
+        </div>
+
+        {/* 税种预览 */}
+        <div className="bg-slate-50 rounded-xl p-4 mb-6">
+          <h3 className="text-sm font-semibold text-slate-700 mb-2">当期应报税种</h3>
+          <ul className="space-y-1">
+            {obligations.map(o => (
+              <li key={o.key} className="flex items-center gap-2 text-sm">
+                <span className={`w-1.5 h-1.5 rounded-full ${o.isDue ? 'bg-green-500' : 'bg-slate-300'}`} />
+                <span className={o.isDue ? 'text-slate-800' : 'text-slate-400'}>
+                  {o.name}（{o.frequency === 'monthly' ? '月报' : o.frequency === 'quarterly' ? '季报' : '年报'}）
+                </span>
+                {o.isDue && <span className="text-xs text-green-600 font-medium ml-auto">本期需报</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <button
+          onClick={handleRegister}
+          className="w-full py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+        >
+          完成，开始报税
+        </button>
       </div>
     </div>
   )

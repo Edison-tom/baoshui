@@ -61,7 +61,7 @@ function LeftPanel() {
         <div>
           <h2 className="text-base font-semibold text-slate-900">{company.fullName}</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {company.shortName} · {company.taxpayerType === 'general_taxpayer' ? '一般纳税人' : '小规模纳税人'}
+            {company.fullName} · {company.taxpayerType === 'general_taxpayer' ? '一般纳税人' : '小规模纳税人'}
             {' · '}所属期：{company.period.startDate} 至 {company.period.endDate}
           </p>
         </div>

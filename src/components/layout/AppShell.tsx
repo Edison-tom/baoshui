@@ -17,29 +17,39 @@ export function AppShell() {
   const isImportComplete = useImportStore(s => s.isImportComplete)
   const currentStage = useWorkbenchStore(s => s.currentStage)
   const setStage = useWorkbenchStore(s => s.setStage)
+  const navigationDirection = useWorkbenchStore(s => s.navigationDirection)
+  const setNavigationDirection = useWorkbenchStore(s => s.setNavigationDirection)
   const isClosing = useWorkbenchStore(s => s.isClosing)
 
-  // 自动流转：注册完成 → 导入阶段
+  // 自动向前流转（仅当非手动返回时触发）
   useEffect(() => {
+    if (navigationDirection === 'back') {
+      setNavigationDirection(null)
+      return
+    }
     if (isRegistered && currentStage === 'register') {
       setStage('import')
     }
-  }, [isRegistered, currentStage, setStage])
+  }, [isRegistered, currentStage, setStage, navigationDirection, setNavigationDirection])
 
-  // 自动流转：导入完成 → 分类确认阶段
   useEffect(() => {
+    if (navigationDirection === 'back') {
+      setNavigationDirection(null)
+      return
+    }
     if (isImportComplete && currentStage === 'import') {
       setStage('classify')
     }
-  }, [isImportComplete, currentStage, setStage])
+  }, [isImportComplete, currentStage, setStage, navigationDirection, setNavigationDirection])
 
   const handleBack = () => {
     const idx = STAGES.indexOf(currentStage as Stage)
     if (idx <= 0) return
     const prev = STAGES[idx - 1]
-    // 如果上一步骤的数据还没有，不允许返回
+    // 如果上一步骤数据不存在，不允许返回
     if (prev === 'classify' && !isImportComplete) return
     if (prev === 'import' && !isRegistered) return
+    setNavigationDirection('back')
     setStage(prev)
   }
 
