@@ -9,6 +9,9 @@ import { parseInvoiceExport } from '../../engines/import/invoice-parser'
 import { parsePayroll } from '../../engines/import/payroll-parser'
 import { parseExpense } from '../../engines/import/expense-parser'
 import { parseReceivablesPayables } from '../../engines/import/rp-parser'
+import { parseOfdFile } from '../../engines/import/ofd-parser'
+import { parsePdfInvoice } from '../../engines/import/pdf-invoice-parser'
+import { parseInvoiceText } from '../../engines/import/invoice-text-parser'
 import type { FileCategory, InvoiceItem, BankTransaction, PayrollEntry, ExpenseItem, ReceivablesPayablesItem } from '../../engines/import/types'
 import * as XLSX from 'xlsx'
 
@@ -35,11 +38,6 @@ async function readExcelRows(file: File): Promise<Record<string,any>[]> {
   const workbook = XLSX.read(buffer, { type: 'array' })
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
   return XLSX.utils.sheet_to_json(sheet, { defval: '' })
-}
-
-async function readCSVText(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer()
-  return new TextDecoder('utf-8').decode(buffer)
 }
 
 function checkPeriodRelevance(
@@ -123,10 +121,33 @@ export function ImportPanel() {
       if (isExcel) {
         try {
           if (ext === '.csv') {
-            const csvText = await readCSVText(file)
-            rows = XLSX.utils.sheet_to_json(XLSX.read(csvText, { type: 'string' }).Sheets.Sheet1, { defval: '' })
+            try {
+              rows = await readExcelRows(file)
+            } catch {
+              // XLSX CSV 解析失败，尝试手动解析
+              const text = await new Promise<string>((res, rej) => {
+                const reader = new FileReader()
+                reader.onload = () => res(reader.result as string)
+                reader.onerror = () => rej(reader.error)
+                reader.readAsText(file)
+              })
+              const lines = text.trim().split('\n')
+              if (lines.length >= 2) {
+                const hdrs = lines[0].split(',').map(h => h.trim())
+                rows = lines.slice(1).map(line => {
+                  const vals = line.split(',').map(v => v.trim())
+                  const row: Record<string,any> = {}
+                  hdrs.forEach((h, i) => { row[h] = vals[i] || '' })
+                  return row
+                }).filter(r => Object.values(r).some(v => v))
+              }
+            }
           } else {
-            rows = await readExcelRows(file)
+            try {
+              rows = await readExcelRows(file)
+            } catch {
+              // 非CSV文件解析失败
+            }
           }
           if (rows.length > 0) headers = Object.keys(rows[0])
         } catch (e) {
@@ -170,9 +191,20 @@ export function ImportPanel() {
           const isOfd = ext === '.ofd'
           const isImage = ['.jpg', '.jpeg', '.png', '.bmp', '.webp'].includes(ext)
           const isPdf = ext === '.pdf'
-          error = isOfd ? 'OFD 发票请导出为 Excel 后导入' :
-                  isImage ? '图片发票请导出为 Excel 后导入' :
-                  isPdf ? 'PDF 发票请导出为 Excel 后导入' : '暂不支持此格式'
+          if (isOfd) {
+            const ofdInvoices = await parseOfdFile(file)
+            allInvoices.push(...ofdInvoices)
+            parsedCount = ofdInvoices.length
+          } else if (isPdf) {
+            const pdfInvoices = await parsePdfInvoice(file)
+            allInvoices.push(...pdfInvoices)
+            parsedCount = pdfInvoices.length
+          } else if (isImage) {
+            error = '图片发票需 OCR 识别，目前版本建议先导出为 Excel 格式导入'
+          } else {
+            error = '暂不支持此格式'
+          }
+          if (parsedCount === 0 && !error) error = '未识别到发票信息'
         }
       } catch (e: any) {
         error = `解析出错：${e.message || e}`
