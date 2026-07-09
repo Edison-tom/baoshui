@@ -2,10 +2,10 @@ import { useImportStore } from '../../stores/import'
 import { useClassifyStore } from '../../stores/classify'
 
 export function ClassifyPanel() {
-  const isImportComplete = useImportStore(s => s.isImportComplete)
+  const hasImportedData = useImportStore(s => s.hasImportedData)
   const result = useClassifyStore(s => s.result)
 
-  if (!isImportComplete || !result) return null
+  if (!hasImportedData || !result) return null
 
   const totalCount = result.entries.length
   const incomeCount = result.incomeEntries.length

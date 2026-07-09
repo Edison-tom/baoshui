@@ -14,37 +14,78 @@ type Stage = typeof STAGES[number]
 
 export function AppShell() {
   const isRegistered = useCompanyStore(s => s.isRegistered)
-  const isImportComplete = useImportStore(s => s.isImportComplete)
+  const hasImportedData = useImportStore(s => s.hasImportedData)
   const currentStage = useWorkbenchStore(s => s.currentStage)
   const setStage = useWorkbenchStore(s => s.setStage)
   const isClosing = useWorkbenchStore(s => s.isClosing)
 
+  const idx = STAGES.indexOf(currentStage as Stage)
+
   const handleBack = () => {
-    const idx = STAGES.indexOf(currentStage as Stage)
     if (idx <= 0) return
     const prev = STAGES[idx - 1]
-    // 如果上一步骤数据不存在，不允许返回
-    if (prev === 'classify' && !isImportComplete) return
+    // 前置条件检查
+    if (prev === 'classify' && !hasImportedData) return
     if (prev === 'import' && !isRegistered) return
     setStage(prev)
   }
 
-  const showBackLink = currentStage !== 'register' && !isClosing
+  const handleForward = () => {
+    if (idx >= STAGES.length - 1) return
+    const next = STAGES[idx + 1]
+    // 前置条件检查
+    if (next === 'classify' && !hasImportedData) return
+    if (next === 'import' && !isRegistered) return
+    setStage(next)
+  }
+
+  const showBack = idx > 0 && !isClosing
+  const showForward = idx < STAGES.length - 1 && !isClosing // 不含 closing
+
+  // 前进按钮文案和禁用
+  const forwardInfo = (() => {
+    if (currentStage === 'import') {
+      const disabled = !hasImportedData
+      return { disabled, text: disabled ? '请先导入数据' : '前往分类确认 →', hint: disabled }
+    }
+    if (currentStage === 'classify') return { disabled: false, text: '前往申报计算 →', hint: false }
+    if (currentStage === 'declare') return { disabled: false, text: '完成申报 · 安全销毁数据 →', hint: false }
+    return { disabled: true, text: '', hint: false }
+  })()
 
   return (
     <div className="min-h-screen bg-white text-slate-700 font-sans">
       <Header />
       <main className="max-w-screen-2xl mx-auto pb-24">
 
-        {/* 返回上一步链接 */}
-        {showBackLink && (
-          <div className="px-6 pt-3">
-            <button
-              onClick={handleBack}
-              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              ← 返回上一步
-            </button>
+        {/* 顶部导航栏 */}
+        {(showBack || showForward) && (
+          <div className="flex items-center justify-between px-6 pt-3">
+            {showBack ? (
+              <button onClick={handleBack}
+                className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+                ← 返回上一步
+              </button>
+            ) : <div />}
+            {showForward && (
+              <button
+                onClick={() => {
+                  if (currentStage === 'declare') {
+                    useWorkbenchStore.getState().setClosing(true)
+                    return
+                  }
+                  handleForward()
+                }}
+                disabled={forwardInfo.disabled}
+                className={`text-xs transition-colors ${
+                  forwardInfo.disabled
+                    ? 'text-slate-300 cursor-not-allowed'
+                    : 'text-blue-600 hover:text-blue-800'
+                }`}
+              >
+                {forwardInfo.text}
+              </button>
+            )}
           </div>
         )}
 

@@ -78,10 +78,15 @@ interface ParsedFile {
 }
 
 export function ImportPanel() {
-  const { setDetectedFiles, setBankTransactions, setInvoices, setPayroll, setExpenses, setReceivablesPayables, setImportComplete, isImportComplete } = useImportStore()
+  const { setDetectedFiles, appendBankTransactions, appendInvoices, appendPayroll, appendExpenses, appendReceivablesPayables, markImported, hasImportedData } = useImportStore()
   const [dragOver, setDragOver] = useState(false)
   const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([])
   const [parsing, setParsing] = useState(false)
+  const existingInvoices = useImportStore(s => s.invoices)
+  const existingBank = useImportStore(s => s.bankTransactions)
+  const existingPayroll = useImportStore(s => s.payroll)
+  const existingExpenses = useImportStore(s => s.expenses)
+  const existingRp = useImportStore(s => s.receivablesPayables)
   const company = useCompanyStore(s => s.company)
   const period = company?.period
   const fileStoreRef = useRef<{ invoices: InvoiceItem[]; bank: BankTransaction[]; payroll: PayrollEntry[]; expenses: ExpenseItem[]; rp: ReceivablesPayablesItem[] }>({
@@ -94,7 +99,6 @@ export function ImportPanel() {
   }, [company])
 
   const totalParsed = parsedFiles.reduce((s, f) => s + f.parsedCount, 0)
-  const totalParsedTypes = parsedFiles.filter(f => f.parsedCount > 0).length
 
   const processFiles = useCallback(async (fileList: FileList) => {
     const files = Array.from(fileList)
@@ -292,12 +296,12 @@ export function ImportPanel() {
 
   const handleConfirmImport = () => {
     const store = fileStoreRef.current
-    if (store.invoices.length > 0) setInvoices(store.invoices)
-    if (store.bank.length > 0) setBankTransactions(store.bank)
-    if (store.payroll.length > 0) setPayroll(store.payroll)
-    if (store.expenses.length > 0) setExpenses(store.expenses)
-    if (store.rp.length > 0) setReceivablesPayables(store.rp)
-    setImportComplete(true)
+    if (store.invoices.length > 0) appendInvoices(store.invoices)
+    if (store.bank.length > 0) appendBankTransactions(store.bank)
+    if (store.payroll.length > 0) appendPayroll(store.payroll)
+    if (store.expenses.length > 0) appendExpenses(store.expenses)
+    if (store.rp.length > 0) appendReceivablesPayables(store.rp)
+    markImported()
     setStage('classify')
   }
 
@@ -368,14 +372,14 @@ export function ImportPanel() {
         </div>
       )}
 
-      {parsedFiles.length > 0 && !isImportComplete && (
+      {parsedFiles.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <span className="text-sm font-medium text-slate-700">
               已解析 {parsedFiles.length} 个文件
             </span>
             <span className="text-xs text-blue-600">
-              共识别 {totalParsed} 条数据（{totalParsedTypes} 类）
+              本次识别 {totalParsed} 条数据{hasImportedData ? "（追加）" : ""}
             </span>
           </div>
           <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
@@ -426,12 +430,22 @@ export function ImportPanel() {
         </div>
       )}
 
-      {isImportComplete && (
-        <div className="bg-green-50 rounded-xl p-4 text-center">
-          <p className="text-sm font-medium text-green-700">✅ 数据已导入完成</p>
-          <p className="text-xs text-green-600 mt-1">可前往"分类确认"阶段查看</p>
+      {hasImportedData && parsedFiles.length === 0 && (
+        <div className="bg-green-50 rounded-xl p-4 text-center mb-4">
+          <p className="text-sm text-green-700 font-medium">✅ 数据已导入完成</p>
+          <p className="text-xs text-green-600 mt-1">
+            已导入 {existingInvoices.length + existingBank.length + existingPayroll.length + existingExpenses.length + existingRp.length} 条数据
+            {existingInvoices.length > 0 && `（发票 ${existingInvoices.length}）`}
+            {existingBank.length > 0 && `（银行 ${existingBank.length}）`}
+            {existingPayroll.length > 0 && `（工资 ${existingPayroll.length}）`}
+            {existingExpenses.length > 0 && `（费用 ${existingExpenses.length}）`}
+            {existingRp.length > 0 && `（应收应付 ${existingRp.length}）`}
+          </p>
+          <p className="text-xs text-green-500 mt-2">如需补充文件，直接拖入下方区域</p>
         </div>
       )}
+
     </div>
   )
 }
+
