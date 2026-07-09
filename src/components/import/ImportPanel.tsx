@@ -11,6 +11,7 @@ import { parseExpense } from '../../engines/import/expense-parser'
 import { parseReceivablesPayables } from '../../engines/import/rp-parser'
 import { parseOfdFile } from '../../engines/import/ofd-parser'
 import { parsePdfInvoice } from '../../engines/import/pdf-invoice-parser'
+import { parseImageInvoice } from '../../engines/import/image-invoice-parser'
 import type { FileCategory, InvoiceItem, BankTransaction, PayrollEntry, ExpenseItem, ReceivablesPayablesItem } from '../../engines/import/types'
 import * as XLSX from 'xlsx'
 
@@ -199,7 +200,14 @@ export function ImportPanel() {
             allInvoices.push(...pdfInvoices)
             parsedCount = pdfInvoices.length
           } else if (isImage) {
-            error = '图片发票需 OCR 识别，目前版本建议先导出为 Excel 格式导入'
+            try {
+              const imageInvoices = await parseImageInvoice(file)
+              allInvoices.push(...imageInvoices)
+              parsedCount = imageInvoices.length
+              if (imageInvoices.length === 0) error = 'OCR 未识别到发票信息，请确保图片清晰'
+            } catch (ocrErr) {
+              error = 'OCR 识别失败，建议导出为 Excel 格式导入'
+            }
           } else {
             error = '暂不支持此格式'
           }
@@ -221,11 +229,54 @@ export function ImportPanel() {
     setParsing(false)
   }, [period, company, setDetectedFiles])
 
+  /** 遍历文件夹获取所有文件（递归） */
+  async function collectFilesFromItems(items: DataTransferItemList): Promise<File[]> {
+    const files: File[] = []
+    const entries: FileSystemEntry[] = []
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i].webkitGetAsEntry()
+      if (entry) entries.push(entry)
+    }
+    for (const entry of entries) {
+      await traverseEntry(entry, files)
+    }
+    return files
+  }
+
+  async function traverseEntry(entry: FileSystemEntry, files: File[]): Promise<void> {
+    if (entry.isFile) {
+      const fileEntry = entry as FileSystemFileEntry
+      return new Promise((resolve) => {
+        fileEntry.file((f) => { files.push(f); resolve() }, () => resolve())
+      })
+    }
+    if (entry.isDirectory) {
+      const dirEntry = entry as FileSystemDirectoryEntry
+      const reader = dirEntry.createReader()
+      const entries = await new Promise<FileSystemEntry[]>((resolve) => {
+        reader.readEntries((results) => resolve(results))
+      })
+      for (const child of entries) {
+        await traverseEntry(child, files)
+      }
+    }
+  }
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
-    if (e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files)
+    const dt = e.dataTransfer
+    if (dt.items && dt.items.length > 0 && dt.items[0].webkitGetAsEntry) {
+      // 支持文件夹拖入
+      collectFilesFromItems(dt.items).then((files) => {
+        if (files.length > 0) {
+          const dt2 = new DataTransfer()
+          files.forEach(f => dt2.items.add(f))
+          processFiles(dt2.files)
+        }
+      })
+    } else if (dt.files.length > 0) {
+      processFiles(dt.files)
     }
   }, [processFiles])
 

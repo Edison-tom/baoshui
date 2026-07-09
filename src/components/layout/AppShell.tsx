@@ -9,6 +9,9 @@ import { ImportPanel } from '../import/ImportPanel'
 import { ClassifyPanel } from '../classify/ClassifyPanel'
 import { Workbench } from '../workbench/Workbench'
 
+const STAGES = ['register', 'import', 'classify', 'declare', 'closing'] as const
+type Stage = typeof STAGES[number]
+
 export function AppShell() {
   const isRegistered = useCompanyStore(s => s.isRegistered)
   const isImportComplete = useImportStore(s => s.isImportComplete)
@@ -30,10 +33,35 @@ export function AppShell() {
     }
   }, [isImportComplete, currentStage, setStage])
 
+  const handleBack = () => {
+    const idx = STAGES.indexOf(currentStage as Stage)
+    if (idx <= 0) return
+    const prev = STAGES[idx - 1]
+    // 如果上一步骤的数据还没有，不允许返回
+    if (prev === 'classify' && !isImportComplete) return
+    if (prev === 'import' && !isRegistered) return
+    setStage(prev)
+  }
+
+  const showBackLink = currentStage !== 'register' && !isClosing
+
   return (
     <div className="min-h-screen bg-white text-slate-700 font-sans">
       <Header />
       <main className="max-w-screen-2xl mx-auto pb-24">
+
+        {/* 返回上一步链接 */}
+        {showBackLink && (
+          <div className="px-6 pt-3">
+            <button
+              onClick={handleBack}
+              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              ← 返回上一步
+            </button>
+          </div>
+        )}
+
         {/* 注册阶段 */}
         {currentStage === 'register' && <CompanyWizard />}
 

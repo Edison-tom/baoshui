@@ -10,10 +10,9 @@ import { parseInvoiceText } from './invoice-text-parser'
  */
 export async function extractPdfText(file: File): Promise<string> {
   const pdfjs = await import('pdfjs-dist')
-  // pdfjs-dist v6 不再默认包含 cMap，需要设置 worker
-  // @ts-expect-error pdfjs worker has no types
-  const pdfjsWorker: any = await import('pdfjs-dist/build/pdf.worker.mjs')
-  pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker
+  // Vite 环境下用 URL 创建 worker 路径
+  const workerUrl = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).href
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
   const buffer = await file.arrayBuffer()
   const doc = await pdfjs.getDocument({ data: buffer }).promise
