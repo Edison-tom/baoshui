@@ -8,6 +8,7 @@ import { CompanyWizard } from '../company/CompanyWizard'
 import { ImportPanel } from '../import/ImportPanel'
 import { ClassifyPanel } from '../classify/ClassifyPanel'
 import { Workbench } from '../workbench/Workbench'
+import { DebugPanel } from '../debug/DebugPanel'
 
 const STAGES = ['register', 'import', 'classify', 'declare', 'closing'] as const
 type Stage = typeof STAGES[number]
@@ -134,6 +135,7 @@ export function AppShell() {
 
       {/* 底部进度条 */}
       {!isClosing && <BottomProgressBar />}
+      {!isClosing && <DebugPanel />}
     </div>
   )
 }

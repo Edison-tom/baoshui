@@ -2,6 +2,7 @@
  * OFD 发票解析器
  * 使用 JSZip 解压 .ofd 文件，读取内部 XML 提取发票字段
  */
+import { logger } from '../../utils/logger'
 import type { InvoiceItem } from './types'
 import { parseInvoiceText } from './invoice-text-parser'
 
@@ -90,7 +91,8 @@ export async function parseOfdFile(file: File): Promise<InvoiceItem[]> {
   let JSZip: any
   try {
     JSZip = (await import('jszip')).default
-  } catch {
+  } catch (e: any) {
+    logger.error("OFD", "JSZip 加载失败", e)
     throw new Error('JSZip 加载失败，请刷新页面重试')
   }
 
@@ -134,5 +136,6 @@ export async function parseOfdFile(file: File): Promise<InvoiceItem[]> {
     }
   }
 
+  logger.error("OFD", "文件中未找到有效的发票XML")
   throw new Error('OFD 文件中未找到有效的发票 XML 数据')
 }

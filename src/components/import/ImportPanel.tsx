@@ -1,3 +1,4 @@
+import { logger } from '../../utils/logger'
 import { useCallback, useState, useMemo, useRef } from 'react'
 import { useCompanyStore } from '../../stores/company'
 import { useImportStore } from '../../stores/import'
@@ -123,7 +124,8 @@ export function ImportPanel() {
           if (ext === '.csv') {
             try {
               rows = await readExcelRows(file)
-            } catch {
+            } catch (csvErr: any) {
+              logger.error("Import", "CSV 解析失败", csvErr)
               // XLSX CSV 解析失败，尝试手动解析
               const text = await new Promise<string>((res, rej) => {
                 const reader = new FileReader()
@@ -145,12 +147,14 @@ export function ImportPanel() {
           } else {
             try {
               rows = await readExcelRows(file)
-            } catch {
+            } catch (xlsxErr: any) {
+              logger.error("Import", "XLSX 解析失败", xlsxErr)
               // 非CSV文件解析失败
             }
           }
           if (rows.length > 0) headers = Object.keys(rows[0])
-        } catch (e) {
+        } catch (e: any) {
+          logger.error("Import", "文件读取失败: " + file.name, e)
           detected.push({ name: file.name, category: 'unknown', periodInfo: { isCurrentPeriod: true, periodHint: null }, parsedCount: 0, error: '无法读取文件' })
           continue
         }
@@ -205,7 +209,8 @@ export function ImportPanel() {
               allInvoices.push(...imageInvoices)
               parsedCount = imageInvoices.length
               if (imageInvoices.length === 0) error = 'OCR 未识别到发票信息，请确保图片清晰'
-            } catch (ocrErr) {
+            } catch (ocrErr: any) {
+              logger.error("Import", "OCR 识别失败: " + file.name, ocrErr)
               error = 'OCR 识别失败，建议导出为 Excel 格式导入'
             }
           } else {
@@ -214,7 +219,9 @@ export function ImportPanel() {
           if (parsedCount === 0 && !error) error = '未识别到发票信息'
         }
       } catch (e: any) {
+        logger.error("Import", "解析出错: " + file.name, e)
         error = `解析出错：${e.message || e}`
+        if (e?.stack) error += " (详情见调试面板)"
       }
 
       detected.push({ name: file.name, category, periodInfo, parsedCount, error })
