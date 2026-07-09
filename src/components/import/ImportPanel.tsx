@@ -266,7 +266,7 @@ export function ImportPanel() {
     e.preventDefault()
     setDragOver(false)
     const dt = e.dataTransfer
-    if (dt.items && dt.items.length > 0 && dt.items[0].webkitGetAsEntry) {
+    if (dt.items && dt.items.length > 0 && dt.items[0].kind === 'file') {
       // 支持文件夹拖入
       collectFilesFromItems(dt.items).then((files) => {
         if (files.length > 0) {
