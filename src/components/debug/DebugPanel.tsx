@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { logger, type LogEntry } from '../../utils/logger'
 
 export function DebugPanel() {
@@ -6,6 +6,7 @@ export function DebugPanel() {
   const [logs, setLogs] = useState<LogEntry[]>(() => logger.getLogs())
   const listRef = useRef<HTMLDivElement>(null)
   const [filter, setFilter] = useState<LogEntry['level'] | 'all'>('all')
+  const [copied, setCopied] = useState(false)
 
   // 自动刷新日志
   useEffect(() => {
@@ -22,6 +23,21 @@ export function DebugPanel() {
       listRef.current.scrollTop = listRef.current.scrollHeight
     }
   }, [logs])
+
+  // 一键复制
+  const copyLogs = useCallback(() => {
+    const filtered = filter === 'all' ? logs : logs.filter(l => l.level === filter)
+    const text = filtered.map(log => {
+      let line = `[${log.timestamp}][${log.level.toUpperCase()}][${log.module}] ${log.message}`
+      if (log.detail) line += '\n' + log.detail
+      if (log.stack) line += '\n' + log.stack
+      return line
+    }).join('\n\n---\n\n')
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [logs, filter])
 
   if (!open) {
     return (
@@ -48,6 +64,12 @@ export function DebugPanel() {
           调试日志 {errorCount > 0 && <span className="text-red-500 ml-1">({errorCount} 个错误)</span>}
         </span>
         <div className="flex items-center gap-2">
+          <button
+            onClick={copyLogs}
+            className="text-xs text-slate-500 hover:text-slate-700 px-1.5 py-0.5 rounded hover:bg-slate-200 transition-colors"
+          >
+            {copied ? '✅ 已复制' : '📋 复制'}
+          </button>
           <select
             value={filter}
             onChange={e => setFilter(e.target.value as LogEntry['level'] | 'all')}
