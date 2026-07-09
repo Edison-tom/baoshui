@@ -5,6 +5,23 @@
 import type { InvoiceItem } from './types'
 import { parseMoney } from './bank-parser'
 
+/**
+ * 标准化 OCR 文本：去除中文字符间空格，统一冒号等
+ */
+function normalizeOcrText(text: string): string {
+  // 1. 去掉中文字符之间的空格（OCR 常见问题）
+  let s = text.replace(/([\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, '$1')
+  // 2. 去掉标点与中文间的空格
+  s = s.replace(/([\u4e00-\u9fff])\s+([：:;，。！？、])/g, '$1$2')
+  s = s.replace(/([：:;，。！？、])\s+(?=[\u4e00-\u9fff])/g, '$1')
+  // 3. 统一各种冒号（OCR 常把 : 识别为 ; 或全角 :）
+  s = s.replace(/[：;；]/g, ':')
+  // 4. 去掉行首行尾孤立符号
+  s = s.replace(/^[^\u4e00-\u9fff\dA-Za-z]+/gm, '')
+  s = s.replace(/[^\u4e00-\u9fff\dA-Za-z]+$/gm, '')
+  return s
+}
+
 function findMatch(text: string, patterns: RegExp[]): string {
   for (const p of patterns) {
     const m = text.match(p)
@@ -14,6 +31,7 @@ function findMatch(text: string, patterns: RegExp[]): string {
 }
 
 export function parseInvoiceText(text: string, fileName?: string): InvoiceItem | null {
+  text = normalizeOcrText(text)
   // 先检查是否有财务关键字（金额/合计等），保留"发票"关键字严格匹配
   const hasInvoiceKeyword = text.includes('发票') || text.includes('invoice')
   const hasFinancialData = /[金总合小写][额计款]/.test(text) || /\d+[,.]?\d*\s*[元￥¥]/.test(text)
