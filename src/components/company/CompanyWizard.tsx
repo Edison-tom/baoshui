@@ -36,11 +36,19 @@ const defaultModules: EnabledModules = {
 
 export function CompanyWizard() {
   const register = useCompanyStore(s => s.register)
+  const company = useCompanyStore(s => s.company)
   const [step, setStep] = useState(0) // 0 = 基础信息, 1 = 高级选项
-  const [fullName, setFullName] = useState('')
-  const [taxpayerType, setTaxpayerType] = useState<TaxpayerType>('small_scale_taxpayer')
-  const [province, setProvince] = useState<Province>('hunan')
-  const [modules, setModules] = useState<EnabledModules>({ ...defaultModules })
+  // 如果已有已注册的公司数据，回退编辑时保留
+  const [fullName, setFullName] = useState(company?.fullName || '')
+  const [taxpayerType, setTaxpayerType] = useState<TaxpayerType>(
+    (company?.taxpayerType as TaxpayerType) || 'small_scale_taxpayer'
+  )
+  const [province, setProvince] = useState<Province>(
+    (company?.province as Province) || 'hunan'
+  )
+  const [modules, setModules] = useState<EnabledModules>(
+    company?.modules ? { ...defaultModules, ...company.modules } : { ...defaultModules }
+  )
 
   const vatQualification: VatQualification =
     taxpayerType === 'general_taxpayer' ? 'general' : 'small_scale'
