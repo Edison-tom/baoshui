@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useImportStore } from '../../stores/import'
 import { useClassifyStore } from '../../stores/classify'
+import { useCompanyStore } from '../../stores/company'
 import { classifyAll } from '../../engines/classify'
+import { getCrossPeriodInvoiceSummary, getCrossPeriodTransactionSummary } from '../../engines/import/period-check'
 import type { ClassificationResult } from '../../engines/classify/types'
+import type { TaxPeriod } from '../../engines/types'
 
 /** 分→元 显示 */
 function formatYuan(fen: number): string {
@@ -36,9 +39,15 @@ function sourceLabel(s: string): string {
   return map[s] || s
 }
 
+/** 所属期文字描述 */
+function periodLabel(p: TaxPeriod): string {
+  if (p.quarter) return `${p.year}年第${p.quarter}季度`
+  return `${p.year}年${p.month}月`
+}
+
 /* ---------- 数据概览卡片 ---------- */
-function DataCard({ title, count, amount, children, color }: {
-  title: string; count: number; amount: string; color: string; children?: React.ReactNode
+function DataCard({ title, count, amount, children, color, warning }: {
+  title: string; count: number; amount: string; color: string; warning?: string; children?: React.ReactNode
 }) {
   if (count === 0) return null
   return (
@@ -48,6 +57,11 @@ function DataCard({ title, count, amount, children, color }: {
         <span className="text-sm text-slate-500">{count} 条</span>
       </div>
       <p className="text-lg font-semibold text-slate-900">{amount}</p>
+      {warning && (
+        <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+          ⚠️ {warning}
+        </p>
+      )}
       {children && <div className="mt-3 pt-3 border-t border-slate-200/60">{children}</div>}
     </div>
   )
@@ -94,16 +108,30 @@ export function ClassifyPanel() {
 
   const result = useClassifyStore(s => s.result)
   const setResult = useClassifyStore(s => s.setResult)
+  const company = useCompanyStore(s => s.company)
 
   const [classifying, setClassifying] = useState(false)
 
   if (!hasImportedData) return null
 
+  const period = company?.period
+
+  /* ---- 期间校验 ---- */
+  const crossPeriodInvoices = period ? getCrossPeriodInvoiceSummary(invoices, period) : null
+  const crossPeriodBank = period ? getCrossPeriodTransactionSummary(bankTransactions, period) : null
+  const periodWarnings: string[] = []
+  if (crossPeriodInvoices && crossPeriodInvoices.count > 0) {
+    periodWarnings.push(`发票中有 ${crossPeriodInvoices.count} 条（${formatYuan(crossPeriodInvoices.totalAmount)}）不属于本期（${periodLabel(period!)}）`)
+  }
+  if (crossPeriodBank && crossPeriodBank.count > 0) {
+    periodWarnings.push(`银行流水中有 ${crossPeriodBank.count} 条不属于本期`)
+  }
+
   /* ---- 数据统计 ---- */
   const bankIncome = bankTransactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0)
   const bankExpense = bankTransactions.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0)
-  const invoiceIn = invoices.filter(i => i.isPurchase).reduce((s, i) => s + i.totalAmount, 0)
-  const invoiceOut = invoices.filter(i => !i.isPurchase).reduce((s, i) => s + i.totalAmount, 0)
+  const invoiceInAmt = invoices.filter(i => i.isPurchase).reduce((s, i) => s + i.totalAmount, 0)
+  const invoiceOutAmt = invoices.filter(i => !i.isPurchase).reduce((s, i) => s + i.totalAmount, 0)
   const payrollTotal = payroll.reduce((s, p) => s + (p.grossPay || p.grossSalary || 0), 0)
   const netPayTotal = payroll.reduce((s, p) => s + (p.netPay || 0), 0)
   const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0)
@@ -114,12 +142,12 @@ export function ClassifyPanel() {
 
   /* ---- 预览数据 ---- */
   const invoicePreview = invoices.slice(0, 10).map(i => [
-    { label: i.sellerName || i.buyerName || '—', value: i.sellerName?.includes('湖南') ? i.sellerName!.slice(-4) : (i.invoiceNumber || '') },
+    { label: (i.sellerName || i.buyerName || '—').slice(-6), value: i.invoiceNumber || '' },
     { label: '金额', value: formatYuan(i.totalAmount) },
-    { label: '', value: i.isPurchase ? '⬅️ 进项' : '➡️ 销项' },
+    { label: '日期', value: (i.issueDate || i.date || '').slice(5) },
   ])
   const bankPreview = bankTransactions.slice(0, 10).map(t => [
-    { label: t.counterparty?.slice(-6) || '—', value: t.date || '' },
+    { label: (t.counterparty || '—').slice(-6), value: t.date || '' },
     { label: '金额', value: formatYuan(t.amount) },
     { label: '类型', value: t.amount > 0 ? '收入' : '支出' },
   ])
@@ -129,6 +157,11 @@ export function ClassifyPanel() {
     setClassifying(true)
     try {
       const r: ClassificationResult = classifyAll(bankTransactions, invoices, payroll, expenses, receivablesPayables)
+      // 注入跨期数据
+      if (crossPeriodInvoices && crossPeriodInvoices.count > 0) {
+        const crossEntryIds = new Set(crossPeriodInvoices.items.map(i => i.id))
+        r.crossPeriod = r.entries.filter(e => crossEntryIds.has(e.id))
+      }
       setResult(r)
     } catch (e) {
       console.error('[ClassifyPanel] 分类引擎异常', e)
@@ -141,19 +174,37 @@ export function ClassifyPanel() {
   if (!result) {
     return (
       <div>
+        {/* 期间提示 */}
+        {period && (
+          <div className="mb-4 px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-600 flex items-center gap-2">
+            📅 当前所属期：<strong>{periodLabel(period)}</strong>
+            {periodWarnings.length > 0 && (
+              <span className="ml-auto text-amber-600 text-xs flex items-center gap-1">
+                ⚠️ {periodWarnings.join('；')}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* 数据来源卡片 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {invoices.length > 0 && (
             <DataCard title="📄 发票" count={invoices.length}
-              amount={`进项 ${formatYuan(invoiceIn)} / 销项 ${formatYuan(invoiceOut)}`}
-              color="bg-blue-50 border-blue-200">
-              <DataPreview items={invoicePreview} fields={['对方/号码', '金额', '类型']} />
+              amount={`进项 ${formatYuan(invoiceInAmt)} / 销项 ${formatYuan(invoiceOutAmt)}`}
+              color="bg-blue-50 border-blue-200"
+              warning={crossPeriodInvoices && crossPeriodInvoices.count > 0
+                ? `${crossPeriodInvoices.count} 条不属于本期`
+                : undefined}>
+              <DataPreview items={invoicePreview} fields={['对方/号码', '金额', '日期']} />
             </DataCard>
           )}
           {bankTransactions.length > 0 && (
             <DataCard title="🏦 银行流水" count={bankTransactions.length}
               amount={`收入 ${formatYuan(bankIncome)} / 支出 ${formatYuan(bankExpense)}`}
-              color="bg-emerald-50 border-emerald-200">
+              color="bg-emerald-50 border-emerald-200"
+              warning={crossPeriodBank && crossPeriodBank.count > 0
+                ? `${crossPeriodBank.count} 条不属于本期`
+                : undefined}>
               <DataPreview items={bankPreview} fields={['对方', '日期', '金额']} />
             </DataCard>
           )}
@@ -226,6 +277,11 @@ export function ClassifyPanel() {
         ) : (
           <span className="text-green-600">✅ 全部分类已确认</span>
         )}
+        {result.crossPeriod.length > 0 && (
+          <span className="text-amber-600" title="非本期的交易，注意是否应计入本期">
+            📅 <strong>{result.crossPeriod.length}</strong> 笔跨期
+          </span>
+        )}
         <span className="text-blue-600 ml-auto">
           收入合计 {formatYuan(result.summary.totalIncome)} ·
           支出合计 {formatYuan(result.summary.totalExpense)}
@@ -247,38 +303,43 @@ export function ClassifyPanel() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {result.entries.map((entry) => (
-              <tr key={entry.id}
-                className={`${entry.needsConfirmation ? 'bg-amber-50/60' : ''} hover:bg-slate-50 transition-colors`}>
-                <td className="px-4 py-2 text-slate-500 whitespace-nowrap">{entry.date}</td>
-                <td className="px-4 py-2 text-slate-700 max-w-[200px] truncate" title={entry.summary}>
-                  {entry.summary || '—'}
-                </td>
-                <td className="px-4 py-2 text-slate-500 max-w-[120px] truncate" title={entry.counterparty}>
-                  {entry.counterparty || '—'}
-                </td>
-                <td className={`px-4 py-2 text-right font-medium whitespace-nowrap ${
-                  entry.amount > 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {formatYuan(entry.amount)}
-                </td>
-                <td className="px-4 py-2 text-slate-700">
-                  {subjectLabel(entry.accountSubject)}
-                </td>
-                <td className="px-4 py-2 text-slate-400 text-xs">
-                  {sourceLabel(entry.originalType)}
-                </td>
-                <td className="px-4 py-2 text-center">
-                  {entry.needsConfirmation ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                      ⚠️ {(entry.confidence * 100).toFixed(0)}%
-                    </span>
-                  ) : (
-                    <span className="text-xs text-green-500">✓ {(entry.confidence * 100).toFixed(0)}%</span>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {result.entries.map((entry) => {
+              const isCross = result.crossPeriod.some(c => c.id === entry.id)
+              return (
+                <tr key={entry.id}
+                  className={`${entry.needsConfirmation ? 'bg-amber-50/60' : ''} ${isCross ? 'bg-amber-50/30' : ''} hover:bg-slate-50 transition-colors`}>
+                  <td className={`px-4 py-2 whitespace-nowrap ${isCross ? 'text-amber-600' : 'text-slate-500'}`}>
+                    {entry.date}{isCross ? ' 📅' : ''}
+                  </td>
+                  <td className="px-4 py-2 text-slate-700 max-w-[200px] truncate" title={entry.summary}>
+                    {entry.summary || '—'}
+                  </td>
+                  <td className="px-4 py-2 text-slate-500 max-w-[120px] truncate" title={entry.counterparty}>
+                    {entry.counterparty || '—'}
+                  </td>
+                  <td className={`px-4 py-2 text-right font-medium whitespace-nowrap ${
+                    entry.amount > 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {formatYuan(entry.amount)}
+                  </td>
+                  <td className="px-4 py-2 text-slate-700">
+                    {subjectLabel(entry.accountSubject)}
+                  </td>
+                  <td className="px-4 py-2 text-slate-400 text-xs">
+                    {sourceLabel(entry.originalType)}
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    {entry.needsConfirmation ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+                        ⚠️ {(entry.confidence * 100).toFixed(0)}%
+                      </span>
+                    ) : (
+                      <span className="text-xs text-green-500">✓ {(entry.confidence * 100).toFixed(0)}%</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
             {result.entries.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
@@ -289,6 +350,14 @@ export function ClassifyPanel() {
           </tbody>
         </table>
       </div>
+
+      {/* 跨期提示 */}
+      {result.crossPeriod.length > 0 && (
+        <div className="mt-3 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+          📅 有 <strong>{result.crossPeriod.length}</strong> 笔交易的日期不属于本期（{period ? periodLabel(period) : ''}）。
+          请在确认时判断是否应计入本期。例如：上期发票本期才入账 → 应计入本期；代开发票实际是上期的 → 不应计入。
+        </div>
+      )}
 
       {/* 重新分类按钮 */}
       <div className="mt-4 flex justify-end">
