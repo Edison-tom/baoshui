@@ -4,7 +4,7 @@ import { useImportStore } from '../../stores/import'
 import { detectFileCategory } from '../../engines/import/auto-detect'
 import { determineTaxObligations } from '../../engines/tax-obligation'
 import { downloadTemplate } from '../../engines/template-generator'
-import { parseBankExcel, parseBankCSV } from '../../engines/import/bank-parser'
+import { parseBankExcel } from '../../engines/import/bank-parser'
 import { parseInvoiceExport } from '../../engines/import/invoice-parser'
 import { parsePayroll } from '../../engines/import/payroll-parser'
 import { parseExpense } from '../../engines/import/expense-parser'
@@ -30,7 +30,6 @@ const TEMPLATES: { key: 'payroll' | 'expense' | 'rp' | 'bank'; label: string; de
   { key: 'bank', label: '📄 银行流水模板', desc: '交易日期、收入/支出金额、对方户名、摘要' },
 ]
 
-/** 解析 Excel/CSV 文件行 */
 async function readExcelRows(file: File): Promise<Record<string,any>[]> {
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array' })
@@ -38,18 +37,11 @@ async function readExcelRows(file: File): Promise<Record<string,any>[]> {
   return XLSX.utils.sheet_to_json(sheet, { defval: '' })
 }
 
-/** 读取 CSV 文本 */
 async function readCSVText(file: File): Promise<string> {
   const buffer = await file.arrayBuffer()
   return new TextDecoder('utf-8').decode(buffer)
 }
 
-/** 读取文件为 ArrayBuffer（用于 OFD/PDF/图片） */
-async function readFileBuffer(file: File): Promise<ArrayBuffer> {
-  return file.arrayBuffer()
-}
-
-/** 检查文件名是否包含当期年份/月份 */
 function checkPeriodRelevance(
   fileName: string,
   companyYear: number,
@@ -77,13 +69,12 @@ function checkPeriodRelevance(
   return { isCurrentPeriod: true, periodHint: null }
 }
 
-/** 导出文件识别+解析结果 */
 interface ParsedFile {
   name: string
   category: FileCategory
   periodInfo: { isCurrentPeriod: boolean; periodHint: string | null }
-  parsedCount: number   // 解析出的条目数
-  error?: string        // 解析错误提示
+  parsedCount: number
+  error?: string
 }
 
 export function ImportPanel() {
@@ -97,13 +88,11 @@ export function ImportPanel() {
     invoices: [], bank: [], payroll: [], expenses: [], rp: [],
   })
 
-  // 当期应报税种
   const obligations = useMemo(() => {
     if (!company) return []
     return determineTaxObligations(company.taxpayerType, company.period, company.modules)
   }, [company])
 
-  // 统计
   const totalParsed = parsedFiles.reduce((s, f) => s + f.parsedCount, 0)
   const totalParsedTypes = parsedFiles.filter(f => f.parsedCount > 0).length
 
@@ -127,9 +116,6 @@ export function ImportPanel() {
     for (const file of files) {
       const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
       const isExcel = ['.xlsx', '.xls', '.csv'].includes(ext)
-      const isImage = ['.jpg', '.jpeg', '.png', '.bmp', '.webp'].includes(ext)
-      const isOfd = ext === '.ofd'
-      const isPdf = ext === '.pdf'
 
       let headers: string[] | undefined
       let rows: Record<string,any>[] = []
@@ -159,32 +145,34 @@ export function ImportPanel() {
           const invoices = parseInvoiceExport(rows, company?.fullName)
           allInvoices.push(...invoices)
           parsedCount = invoices.length
-          if (invoices.length === 0) error = '未识别到发票数据，请检查表头是否包含"发票号码""金额"等字段'
+          if (invoices.length === 0) error = '未识别到发票数据'
         } else if (category === 'bank_statement' && rows.length > 0) {
           const txns = parseBankExcel(rows)
           allBank.push(...txns)
           parsedCount = txns.length
-          if (txns.length === 0) error = '未识别到银行流水，请检查表头是否包含"交易日期""金额"等字段'
+          if (txns.length === 0) error = '未识别到银行流水'
         } else if (category === 'payroll' && rows.length > 0) {
           const payroll = parsePayroll(rows)
           allPayroll.push(...payroll)
           parsedCount = payroll.length
-          if (payroll.length === 0) error = '未识别到工资数据，请检查表头是否包含"姓名""应发工资"等字段'
+          if (payroll.length === 0) error = '未识别到工资数据'
         } else if (category === 'expense' && rows.length > 0) {
           const expenses = parseExpense(rows)
           allExpenses.push(...expenses)
           parsedCount = expenses.length
-          if (expenses.length === 0) error = '未识别到费用报销数据，请检查表头是否包含"日期""金额"等字段'
+          if (expenses.length === 0) error = '未识别到费用报销数据'
         } else if (category === 'receivables_payables' && rows.length > 0) {
           const rp = parseReceivablesPayables(rows)
           allRp.push(...rp)
           parsedCount = rp.length
-          if (rp.length === 0) error = '未识别到应收应付数据，请检查表头是否包含"类型""对方名称"等字段'
+          if (rp.length === 0) error = '未识别到应收应付数据'
         } else if (category === 'invoice_original') {
-          // OFD/PDF/图片 — 标注需额外处理
-          error = isOfd ? 'OFD 发票解析需下载 JSZip 依赖，请先导出为 Excel 格式' :
-                  isImage ? '图片发票解析需 Tesseract.js OCR，建议先导出为 Excel 格式' :
-                  isPdf ? 'PDF 发票解析需 pdfjs 提取文本，建议先导出为 Excel 格式' : '暂不支持此格式'
+          const isOfd = ext === '.ofd'
+          const isImage = ['.jpg', '.jpeg', '.png', '.bmp', '.webp'].includes(ext)
+          const isPdf = ext === '.pdf'
+          error = isOfd ? 'OFD 发票请导出为 Excel 后导入' :
+                  isImage ? '图片发票请导出为 Excel 后导入' :
+                  isPdf ? 'PDF 发票请导出为 Excel 后导入' : '暂不支持此格式'
         }
       } catch (e: any) {
         error = `解析出错：${e.message || e}`
@@ -196,7 +184,6 @@ export function ImportPanel() {
       })
     }
 
-    // 存储解析结果
     fileStoreRef.current = { invoices: allInvoices, bank: allBank, payroll: allPayroll, expenses: allExpenses, rp: allRp }
     setDetectedFiles(storeDetected)
     setParsedFiles(detected)
@@ -211,7 +198,6 @@ export function ImportPanel() {
     }
   }, [processFiles])
 
-  /** 确认导入：将解析结果写入 store，进入下一步 */
   const handleConfirmImport = () => {
     const store = fileStoreRef.current
     if (store.invoices.length > 0) setInvoices(store.invoices)
@@ -224,7 +210,6 @@ export function ImportPanel() {
 
   return (
     <div className="space-y-4">
-      {/* 当期税种提示 */}
       {company && obligations.filter(o => o.isDue).length > 0 && (
         <div className="bg-blue-50 rounded-xl p-4">
           <h3 className="text-sm font-medium text-blue-800 mb-2">
@@ -245,7 +230,6 @@ export function ImportPanel() {
         </div>
       )}
 
-      {/* 模板下载区 */}
       <div className="mb-6 bg-amber-50 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-amber-800">📥 先下载模板填写数据</h3>
@@ -264,7 +248,6 @@ export function ImportPanel() {
         </div>
       </div>
 
-      {/* 拖入区域 */}
       <div
         className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
           dragOver ? 'border-blue-400 bg-blue-50' : 'border-slate-300'
@@ -286,14 +269,12 @@ export function ImportPanel() {
         </label>
       </div>
 
-      {/* 解析中 */}
       {parsing && (
         <div className="text-center py-4">
           <p className="text-sm text-blue-600">⏳ 正在解析文件...</p>
         </div>
       )}
 
-      {/* 解析结果列表 */}
       {parsedFiles.length > 0 && !isImportComplete && (
         <div className="bg-white rounded-xl border border-slate-200">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
@@ -335,7 +316,6 @@ export function ImportPanel() {
             ))}
           </div>
           <div className="px-4 py-3 border-t border-slate-100 space-y-2">
-            {/* 提示未识别的文件 */}
             {parsedFiles.some(f => f.error) && (
               <p className="text-xs text-amber-600">
                 ⚠️ 部分文件未能自动解析。发票原件（OFD/PDF/图片）建议先从税务系统导出为 Excel 格式再导入。
@@ -353,7 +333,6 @@ export function ImportPanel() {
         </div>
       )}
 
-      {/* 已导入完成提示 */}
       {isImportComplete && (
         <div className="bg-green-50 rounded-xl p-4 text-center">
           <p className="text-sm font-medium text-green-700">✅ 数据已导入完成</p>
