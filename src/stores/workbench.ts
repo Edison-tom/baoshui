@@ -5,10 +5,8 @@ export type AppStage = 'register' | 'import' | 'classify' | 'declare' | 'closing
 interface WorkbenchState {
   currentStage: AppStage
   currentTab: string
-  navigationDirection: 'forward' | 'back' | null
   setStage: (s: AppStage) => void
   setTab: (t: string) => void
-  setNavigationDirection: (d: 'forward' | 'back' | null) => void
   isClosing: boolean
   setClosing: (v: boolean) => void
 }
@@ -46,10 +44,8 @@ export { STAGE_ORDER }
 export const useWorkbenchStore = create<WorkbenchState>((set) => ({
   currentStage: 'register',
   currentTab: 'vat',
-  navigationDirection: null,
   isClosing: false,
   setStage: (s) => set({ currentStage: s }),
   setTab: (t) => set({ currentTab: t }),
-  setNavigationDirection: (d) => set({ navigationDirection: d }),
   setClosing: (v) => set({ isClosing: v }),
 }))

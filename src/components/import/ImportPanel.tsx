@@ -2,6 +2,7 @@ import { logger } from '../../utils/logger'
 import { useCallback, useState, useMemo, useRef } from 'react'
 import { useCompanyStore } from '../../stores/company'
 import { useImportStore } from '../../stores/import'
+import { useWorkbenchStore } from '../../stores/workbench'
 import { detectFileCategory } from '../../engines/import/auto-detect'
 import { determineTaxObligations } from '../../engines/tax-obligation'
 import { downloadTemplate } from '../../engines/template-generator'
@@ -287,6 +288,8 @@ export function ImportPanel() {
     }
   }, [processFiles])
 
+  const setStage = useWorkbenchStore(s => s.setStage)
+
   const handleConfirmImport = () => {
     const store = fileStoreRef.current
     if (store.invoices.length > 0) setInvoices(store.invoices)
@@ -295,6 +298,7 @@ export function ImportPanel() {
     if (store.expenses.length > 0) setExpenses(store.expenses)
     if (store.rp.length > 0) setReceivablesPayables(store.rp)
     setImportComplete(true)
+    setStage('classify')
   }
 
   return (

@@ -21,10 +21,18 @@ export async function extractPdfText(file: File): Promise<string> {
   const texts: string[] = []
 
   for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i)
-    const content = await page.getTextContent()
-    const pageText = content.items.map((item: any) => item.str || '').join(' ')
-    texts.push(pageText)
+    try {
+      const page = await doc.getPage(i)
+      const content = await page.getTextContent()
+      const items = content?.items
+      if (items && Array.isArray(items)) {
+        const pageText = items.map((item: any) => (item && item.str) || '').join(' ')
+        texts.push(pageText)
+      }
+    } catch (pageErr: any) {
+      logger.warn("PDF", "第" + i + "页提取失败", pageErr)
+      // 跳过失败页面，继续处理其他页面
+    }
   }
 
   return texts.join('\n')
@@ -36,6 +44,10 @@ export async function extractPdfText(file: File): Promise<string> {
 export async function parsePdfInvoice(file: File): Promise<InvoiceItem[]> {
   try {
     const text = await extractPdfText(file)
+    if (!text || !text.includes('发票')) {
+      logger.warn("PDF", "PDF中未检测到发票文本: " + file.name)
+      return []
+    }
     const invoice = parseInvoiceText(text, file.name)
     return invoice ? [invoice] : []
   } catch (e: any) {

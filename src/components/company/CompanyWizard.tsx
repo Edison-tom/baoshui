@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useCompanyStore } from '../../stores/company'
+import { useWorkbenchStore } from '../../stores/workbench'
 import { determineTaxObligations } from '../../engines/tax-obligation'
 import type { TaxpayerType, Province, VatQualification, EnabledModules } from '../../engines/types'
 
@@ -57,6 +58,8 @@ export function CompanyWizard() {
 
   const canRegister = fullName.trim().length > 0
 
+  const setStage = useWorkbenchStore(s => s.setStage)
+
   const handleRegister = () => {
     register({
       fullName: fullName.trim(),
@@ -66,6 +69,7 @@ export function CompanyWizard() {
       modules,
       bankAccounts: [],
     })
+    setStage('import')
   }
 
   const toggleModule = (key: keyof EnabledModules) => {
