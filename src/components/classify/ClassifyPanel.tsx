@@ -150,12 +150,10 @@ export function ClassifyPanel() {
   const handleClassify = () => {
     setClassifying(true)
     try {
-      const r: ClassificationResult = classifyAll(bankTransactions, invoices, payroll, expenses, receivablesPayables)
-      // 注入跨期数据
-      if (crossPeriodInvoices && crossPeriodInvoices.count > 0) {
-        const crossEntryIds = new Set(crossPeriodInvoices.items.map(i => i.id))
-        r.crossPeriod = r.entries.filter(e => crossEntryIds.has(e.id))
-      }
+      const r: ClassificationResult = classifyAll(
+        bankTransactions, invoices, payroll, expenses, receivablesPayables,
+        company?.fullName, period
+      )
       setResult(r)
     } catch (e) {
       console.error('[ClassifyPanel] 分类引擎异常', e)
